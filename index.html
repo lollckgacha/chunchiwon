@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>천치원 시즌2</title>
+<link rel="icon" href="logo.png" />
+<link rel="stylesheet" href="css/style.css" />
+<link rel="stylesheet" href="css/formation.css" />
+</head>
+<body>
+
+<div class="bg-glow"></div>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <img src="logo.png" alt="천치원 로고" class="brand-logo" />
+      <div class="brand-text">
+        <span class="brand-name club-name-slot">천치원 시즌2</span>
+        <span class="brand-sub">FOOTBALL SCHOOL</span>
+      </div>
+    </div>
+    <nav class="nav-tabs">
+      <button class="nav-tab active" data-tab="tab-instructors">강사진</button>
+      <button class="nav-tab" data-tab="tab-applicants">지원자</button>
+      <button class="nav-tab" data-tab="tab-board">전술보드</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <!-- ================= 강사진 ================= -->
+  <section id="tab-instructors" class="tab-panel active">
+    <div class="section-head">
+      <h2 class="section-title">강사진</h2>
+      <span class="section-sub club-name-slot">천치원 시즌2</span>
+    </div>
+    <div id="instructor-grid" class="instructor-grid"></div>
+  </section>
+
+  <!-- ================= 지원자 ================= -->
+  <section id="tab-applicants" class="tab-panel">
+    <div class="section-head">
+      <h2 class="section-title">지원자</h2>
+      <span class="section-sub" id="applicant-count">0명 지원</span>
+    </div>
+    <p class="applicant-source-note">
+      모집 게시글 댓글로 지원한 스트리머 명단이에요. 프로필 사진과 방송 썸네일은 SOOP(숲)에서 실시간으로 불러와요.
+    </p>
+    <div id="applicant-grid" class="applicant-grid"></div>
+  </section>
+
+  <!-- ================= 전술보드 ================= -->
+  <section id="tab-board" class="tab-panel">
+    <div class="section-head">
+      <h2 class="section-title">전술보드</h2>
+      <span class="section-sub">지원자 명단에서 끌어와 그라운드나 벤치에 자유롭게 배치하세요</span>
+    </div>
+
+    <div class="field-toolbar">
+      <button id="btn-clear" class="quick-link-btn">🗑 전체 초기화</button>
+      <span id="placed-count" class="section-sub">그라운드 0 · 벤치 0 / 전체 0</span>
+    </div>
+
+    <div class="formation-layout">
+
+      <aside id="roster-panel" class="roster-panel panel">
+        <h2 class="panel-title">👥 지원자 명단</h2>
+        <input id="roster-search" class="roster-search" type="text" placeholder="닉네임 검색..." autocomplete="off" />
+        <div id="roster-list" class="roster-list"></div>
+      </aside>
+
+      <div class="pitch-wrap">
+        <div id="pitch" class="pitch">
+          <svg viewBox="-2 -9 109 86" preserveAspectRatio="xMidYMid meet">
+            <defs>
+              <clipPath id="grassClip">
+                <rect x="-2" y="-9" width="109" height="86" />
+              </clipPath>
+            </defs>
+
+            <!-- 잔디: 그라운드뿐 아니라 위아래 사이드라인 밖 벤치 공간까지 같은 색으로 연장 -->
+            <g clip-path="url(#grassClip)">
+              <rect x="-2" y="-9" width="109" height="86" fill="#0d3d20" />
+              <g fill="#0f4526">
+                <rect x="-2"   y="-9" width="10.7" height="86" />
+                <rect x="18.8" y="-9" width="10.7" height="86" />
+                <rect x="39.9" y="-9" width="10.7" height="86" />
+                <rect x="61"   y="-9" width="10.7" height="86" />
+                <rect x="82.1" y="-9" width="10.7" height="86" />
+                <rect x="103.2" y="-9" width="10.7" height="86" />
+              </g>
+            </g>
+
+            <!-- 위아래 사이드라인 밖 벤치 공간 표시 -->
+            <g fill="#e9fff2" fill-opacity="0.18" font-size="3.6" font-weight="700" letter-spacing="1.3" text-anchor="middle">
+              <text x="52.5" y="-3">BENCH</text>
+              <text x="52.5" y="73">BENCH</text>
+            </g>
+            <g fill="none" stroke="#e9fff2" stroke-width="0.35" stroke-opacity="0.85">
+              <rect x="0" y="0" width="105" height="68" />
+              <line x1="52.5" y1="0" x2="52.5" y2="68" />
+              <circle cx="52.5" cy="34" r="9.15" />
+              <rect x="0" y="13.84" width="16.5" height="40.32" />
+              <rect x="0" y="24.84" width="5.5" height="18.32" />
+              <path d="M 16.5 26.69 A 9.15 9.15 0 0 1 16.5 41.31" />
+              <rect x="88.5" y="13.84" width="16.5" height="40.32" />
+              <rect x="99.5" y="24.84" width="5.5" height="18.32" />
+              <path d="M 88.5 26.69 A 9.15 9.15 0 0 0 88.5 41.31" />
+              <path d="M -1.5 30.34 L 0 30.34" />
+              <path d="M -1.5 37.66 L 0 37.66" />
+              <path d="M 105 30.34 L 106.5 30.34" />
+              <path d="M 105 37.66 L 106.5 37.66" />
+              <path d="M 1 0 A 1 1 0 0 1 0 1" />
+              <path d="M 0 67 A 1 1 0 0 1 1 68" />
+              <path d="M 104 68 A 1 1 0 0 1 105 67" />
+              <path d="M 105 1 A 1 1 0 0 1 104 0" />
+            </g>
+            <g fill="#e9fff2" fill-opacity="0.85">
+              <circle cx="52.5" cy="34" r="0.35" />
+              <circle cx="11" cy="34" r="0.35" />
+              <circle cx="94" cy="34" r="0.35" />
+            </g>
+          </svg>
+          <div id="pitch-tokens" class="pitch-tokens"></div>
+        </div>
+        <p class="pitch-hint">그라운드 안은 선발, 위아래 사이드라인 밖 어두운 공간은 벤치예요. 다시 드래그해서 옮길 수 있고, ×를 누르거나 명단 쪽으로 끌면 제거돼요.</p>
+      </div>
+
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <span class="club-name-slot">천치원 시즌2</span> · 비공식 팬 프로젝트
+</footer>
+
+<!-- 지원글 팝업 -->
+<div id="post-modal" class="modal-overlay">
+  <div class="modal-box post-modal-box">
+    <button class="modal-close" data-close-modal>&times;</button>
+    <div id="post-modal-body" class="modal-body"></div>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

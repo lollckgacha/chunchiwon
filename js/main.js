@@ -1,0 +1,777 @@
+/* =====================================================================
+ * main.js — 천치원 시즌2
+ * data.js 의 window.CHEONCHIWON_DATA 를 읽어서 화면을 그립니다.
+ * (강사진 렌더링 / 지원자 카드 + SOOP 실시간 정보 + Firebase 동기화 /
+ *  전술보드 드래그앤드롭)
+ * ===================================================================== */
+
+(function () {
+  "use strict";
+
+  const DATA = window.CHEONCHIWON_DATA;
+
+  function esc(str) {
+    return String(str).replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    }[c]));
+  }
+
+  function imgSrc(path) {
+    return encodeURI(path);
+  }
+
+  function cssEscape(str) {
+    return window.CSS && CSS.escape ? CSS.escape(str) : str.replace(/["\\]/g, "\\$&");
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* SOOP(숲) 공개 API — 프로필 사진 / 현재 방송(썸네일) 정보               */
+  /* 로그인 필요 없는 공개 엔드포인트라 정적 페이지에서도 그대로 fetch 가능    */
+  /* ------------------------------------------------------------------ */
+  const stationCache = new Map(); // station id -> Promise<data|null>
+
+  function protocolize(url) {
+    if (!url) return "";
+    return url.startsWith("//") ? "https:" + url : url;
+  }
+
+  function getStationData(station) {
+    if (!stationCache.has(station)) {
+      const p = fetch(`https://bjapi.afreecatv.com/api/${encodeURIComponent(station)}/station`, {
+        cache: "no-store",
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .catch(() => null);
+      stationCache.set(station, p);
+    }
+    return stationCache.get(station);
+  }
+
+  function stationUrl(station) {
+    return `https://www.sooplive.com/station/${encodeURIComponent(station)}`;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 포지션 표기 -> 색상 그룹 (GK 노랑 / DF 파랑 / MF 초록 / FW 빨강)          */
+  /* 다양한 표기(FB, CB, CDM, CM, CAM, WF, ST ...)를 넓게 인식한다             */
+  /* ------------------------------------------------------------------ */
+  const POSITION_GROUPS = {
+    gk: ["GK", "G"],
+    df: ["DF", "FB", "CB", "LB", "RB", "WB", "LWB", "RWB", "SW", "SB"],
+    mf: ["MF", "CDM", "CM", "CAM", "DM", "LM", "RM", "AM"],
+    fw: ["FW", "WF", "ST", "LW", "RW", "CF", "SS"],
+  };
+  const POSITION_GROUP_BY_TOKEN = {};
+  Object.keys(POSITION_GROUPS).forEach((group) => {
+    POSITION_GROUPS[group].forEach((token) => {
+      POSITION_GROUP_BY_TOKEN[token] = group;
+    });
+  });
+
+  function primaryPositionGroup(position) {
+    const tokens = String(position || "")
+      .split(/[,/]/)
+      .map((s) => s.trim().toUpperCase())
+      .filter(Boolean);
+    if (tokens.length === 0) return null;
+    return POSITION_GROUP_BY_TOKEN[tokens[0]] || null;
+  }
+
+  // "var(--pos-mf)" 같은 참조 문자열 (알 수 없는 포지션이면 null → 각 컴포넌트 기본색 유지)
+  function positionColorVarValue(position) {
+    const group = primaryPositionGroup(position);
+    return group ? `var(--pos-${group})` : null;
+  }
+
+  // HTML 템플릿의 style 속성에 그대로 넣을 수 있는 CSS 변수 선언 문자열
+  function positionColorStyle(position) {
+    const value = positionColorVarValue(position);
+    return value ? `--pos-color:${value}` : "";
+  }
+
+  function positionBadgeHTML(position, extraClass) {
+    if (!position) return "";
+    const style = positionColorStyle(position);
+    return `<span class="position-badge${extraClass ? " " + extraClass : ""}"${style ? ` style="${style}"` : ""}>${esc(position)}</span>`;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 스프레드시트(Firebase) 에서 지원자 명단 불러오기                        */
+  /* "지원자 동기화 apps script.txt" 가 같은 경로에 씀 —                     */
+  /* 실패하면 data.js 에 들어있는 예비 명단을 그대로 사용                     */
+  /* ------------------------------------------------------------------ */
+  async function loadApplicantsFromFirebase() {
+    if (!DATA.FIREBASE_URL || !DATA.FIREBASE_PATH) return null;
+    try {
+      const url = DATA.FIREBASE_URL + DATA.FIREBASE_PATH + ".json";
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) return null;
+      const json = await res.json();
+      if (!json || !Array.isArray(json.applicants) || json.applicants.length === 0) return null;
+      return json.applicants
+        .filter((a) => a && a.name && a.station)
+        .map((a) => ({
+          name: String(a.name),
+          station: String(a.station),
+          postText: a.postText ? String(a.postText) : "",
+          position: a.position ? String(a.position) : "",
+          photo: a.photo ? String(a.photo) : "",
+        }));
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 강사진 탭                                                            */
+  /* ------------------------------------------------------------------ */
+  function renderInstructors() {
+    const grid = document.getElementById("instructor-grid");
+    if (!grid) return;
+    grid.innerHTML = DATA.INSTRUCTORS.map((m) => {
+      const stationBtn = m.station
+        ? `<a class="instructor-station-btn" href="${esc(stationUrl(m.station))}" target="_blank" rel="noopener noreferrer">📡 방송국</a>`
+        : "";
+      return `
+      <div class="instructor-card">
+        <div class="instructor-photo-wrap">
+          <img class="instructor-photo" src="${imgSrc(m.photo)}" alt="${esc(m.name)}" loading="lazy" />
+        </div>
+        <div class="instructor-role">${esc(m.role)}</div>
+        <div class="instructor-name">${esc(m.name)}</div>
+        ${stationBtn}
+      </div>`;
+    }).join("");
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 지원글 팝업                                                          */
+  /* ------------------------------------------------------------------ */
+  const postModal = document.getElementById("post-modal");
+  const postModalBody = document.getElementById("post-modal-body");
+
+  function openPostModal(applicant) {
+    if (!postModal || !postModalBody) return;
+    const bodyText = applicant.postText && applicant.postText.trim()
+      ? esc(applicant.postText)
+      : "아직 지원 내용을 불러오지 못했어요.";
+    postModalBody.innerHTML = `
+      <h3 class="post-modal-name">${esc(applicant.name)} 지원글</h3>
+      <div class="post-modal-text">${bodyText}</div>
+      <a class="post-modal-link" href="${esc(DATA.POST_URL)}" target="_blank" rel="noopener noreferrer">원본 게시글에서 보기 ↗</a>
+    `;
+    postModal.classList.add("open");
+  }
+
+  function closePostModal() {
+    if (postModal) postModal.classList.remove("open");
+  }
+
+  if (postModal) {
+    postModal.addEventListener("click", (e) => {
+      if (e.target === postModal || e.target.closest("[data-close-modal]")) closePostModal();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closePostModal();
+    });
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 지원자 탭                                                            */
+  /* ------------------------------------------------------------------ */
+  function applicantCardHTML(a) {
+    const initial = a.name.charAt(0);
+    const avatarInner = a.photo
+      ? `<img src="${esc(a.photo)}" alt="${esc(a.name)} 프로필" loading="lazy" />`
+      : `<span class="applicant-avatar-fallback">${esc(initial)}</span>`;
+    const cardStyle = positionColorStyle(a.position);
+    return `
+    <div class="applicant-card"${cardStyle ? ` style="${cardStyle}"` : ""} data-station="${esc(a.station)}">
+      <div class="applicant-head">
+        <div class="applicant-avatar" data-role="avatar">${avatarInner}</div>
+        <div class="applicant-head-text">
+          <div class="applicant-name">${esc(a.name)}</div>
+          <div class="applicant-id">@${esc(a.station)}</div>
+        </div>
+        ${positionBadgeHTML(a.position)}
+        <span class="applicant-live-badge" data-role="live-badge" hidden>LIVE</span>
+      </div>
+      <div class="applicant-thumb-wrap" data-role="thumb">
+        <div class="applicant-thumb-loading">불러오는 중...</div>
+      </div>
+      <div class="applicant-actions">
+        <a class="btn-station" href="${esc(stationUrl(a.station))}" target="_blank" rel="noopener noreferrer">📡 방송국</a>
+        <button type="button" class="btn-post" data-station="${esc(a.station)}">📝 지원글</button>
+      </div>
+    </div>`;
+  }
+
+  // 방송 중인 사람이 먼저, 그 안에서는(비방송자끼리도) 가나다순으로 정렬
+  async function renderApplicants() {
+    const grid = document.getElementById("applicant-grid");
+    const countEl = document.getElementById("applicant-count");
+    if (!grid) return;
+
+    grid.innerHTML = `<p class="applicant-loading">지원자 목록을 불러오는 중...</p>`;
+
+    const withStationData = await Promise.all(
+      DATA.APPLICANTS.map((a) => getStationData(a.station).then((data) => ({ a, data })))
+    );
+
+    withStationData.sort((x, y) => {
+      const liveX = x.data && x.data.broad && x.data.broad.broad_no ? 1 : 0;
+      const liveY = y.data && y.data.broad && y.data.broad.broad_no ? 1 : 0;
+      if (liveX !== liveY) return liveY - liveX; // 방송 중(1)이 먼저
+      return x.a.name.localeCompare(y.a.name, "ko");
+    });
+
+    grid.innerHTML = withStationData.map(({ a }) => applicantCardHTML(a)).join("");
+    if (countEl) countEl.textContent = `총 ${DATA.APPLICANTS.length}명 지원`;
+
+    grid.querySelectorAll(".btn-post").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const applicant = DATA.APPLICANTS.find((a) => a.station === btn.dataset.station);
+        if (applicant) openPostModal(applicant);
+      });
+    });
+
+    withStationData.forEach(({ a, data }) => {
+      const card = grid.querySelector(`.applicant-card[data-station="${cssEscape(a.station)}"]`);
+      if (card) applyStationDataToApplicantCard(card, a, data);
+    });
+  }
+
+  function applyStationDataToApplicantCard(card, applicant, data) {
+    const avatarEl = card.querySelector('[data-role="avatar"]');
+    const thumbEl = card.querySelector('[data-role="thumb"]');
+    const liveBadgeEl = card.querySelector('[data-role="live-badge"]');
+
+    if (!data) {
+      thumbEl.innerHTML = `<div class="applicant-thumb-offline"><span>정보를 불러오지 못했어요</span></div>`;
+      return;
+    }
+
+    // 사진링크가 시트에 직접 지정돼 있으면 그걸 우선 쓰고, 없을 때만 SOOP 프로필로 채운다
+    if (!applicant.photo && data.profile_image) {
+      avatarEl.innerHTML = `<img src="${esc(protocolize(data.profile_image))}" alt="${esc(applicant.name)} 프로필" loading="lazy" />`;
+    }
+
+    if (data.broad && data.broad.broad_no) {
+      card.classList.add("is-live");
+      liveBadgeEl.hidden = false;
+      const thumbUrl = `https://liveimg.sooplive.co.kr/h/${data.broad.broad_no}`;
+      const thumbImg = `<img class="applicant-thumb" src="${thumbUrl}" alt="${esc(applicant.name)} 방송 썸네일" loading="lazy" />`;
+      // 썸네일을 누르면 실시간 방송(방송국 페이지)으로 바로 이동
+      thumbEl.innerHTML = `<a class="applicant-thumb-link" href="${esc(stationUrl(applicant.station))}" target="_blank" rel="noopener noreferrer" title="실시간 방송 보러가기">${thumbImg}</a>`;
+      if (data.broad.broad_title) {
+        thumbEl.title = data.broad.broad_title;
+      }
+    } else {
+      thumbEl.innerHTML = `<div class="applicant-thumb-offline"><span>현재 방송 중이 아니에요</span></div>`;
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 상단 탭 전환                                                          */
+  /* ------------------------------------------------------------------ */
+  document.querySelectorAll(".nav-tab[data-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".nav-tab[data-tab]").forEach((b) => b.classList.remove("active"));
+      document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
+      btn.classList.add("active");
+      document.getElementById(btn.dataset.tab).classList.add("active");
+    });
+  });
+
+  /* ------------------------------------------------------------------ */
+  /* 전술보드 탭 — 드래그 앤 드롭 포메이션 보드 (지원자 명단 기반)             */
+  /* ------------------------------------------------------------------ */
+  const AVATAR_CANVAS_SIZE = 96; // 캔버스 내부 해상도(px). CSS로 실제 크기에 맞게 축소돼 표시됨
+
+  function loadImageEl(url) {
+    return new Promise((resolve, reject) => {
+      const img = new Image(); // DOM에 붙이지 않고 메모리에서만 디코드 → GIF도 애니메이션 없이 첫 프레임만 얻을 수 있음
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = url;
+    });
+  }
+
+  // cover 방식으로 이미지를 캔버스에 그린다 (중앙 크롭)
+  function drawImageCover(canvas, source) {
+    const ctx = canvas.getContext("2d");
+    const cw = canvas.width, ch = canvas.height;
+    const iw = source.naturalWidth || source.width;
+    const ih = source.naturalHeight || source.height;
+    if (!iw || !ih) return;
+    const scale = Math.max(cw / iw, ch / ih);
+    const sw = cw / scale, sh = ch / scale;
+    const sx = (iw - sw) / 2, sy = (ih - sh) / 2;
+    ctx.clearRect(0, 0, cw, ch);
+    ctx.drawImage(source, sx, sy, sw, sh, 0, 0, cw, ch);
+  }
+
+  function ensureAvatarCanvas(container) {
+    let canvas = container.querySelector(":scope > canvas.avatar-canvas");
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+      canvas.className = "avatar-canvas";
+      canvas.width = AVATAR_CANVAS_SIZE;
+      canvas.height = AVATAR_CANVAS_SIZE;
+      container.prepend(canvas);
+    }
+    return canvas;
+  }
+
+  // 전술보드 칩(명단/그라운드)에 정지 프레임으로 사진을 그린다.
+  // <img> 대신 캔버스에 한 번만 그려서 넣기 때문에, 원본이 움직이는 GIF여도 애니메이션되지 않는다.
+  function paintFrozenAvatar(container, img, isFieldChip) {
+    const canvas = ensureAvatarCanvas(container);
+    drawImageCover(canvas, img);
+    container.classList.add(isFieldChip ? "player-chip--photo" : "roster-chip--photo");
+  }
+
+  function initFormationBoard() {
+    const PLAYERS = DATA.APPLICANTS.map((a) => a.name);
+    const applicantByName = new Map(DATA.APPLICANTS.map((a) => [a.name, a]));
+
+    const STORAGE_KEY = "cheonchiwon-s2-formation-v1";
+    const GRASS_TOP_PCT = 10.5;
+    const GRASS_BOTTOM_PCT = 89.5;
+
+    const rosterListEl = document.getElementById("roster-list");
+    const rosterSearchEl = document.getElementById("roster-search");
+    const rosterPanelEl = document.getElementById("roster-panel");
+    const pitchEl = document.getElementById("pitch");
+    const pitchTokensEl = document.getElementById("pitch-tokens");
+    const placedCountEl = document.getElementById("placed-count");
+    const btnClear = document.getElementById("btn-clear");
+
+    if (!rosterListEl || !pitchEl) return; // 전술보드 탭이 없는 페이지에서는 건너뜀
+
+    let positions = {}; // name -> {x, y} (percent)
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        const valid = {};
+        const known = new Set(PLAYERS);
+        Object.keys(parsed).forEach((name) => {
+          const p = parsed[name];
+          if (known.has(name) && p && typeof p.x === "number" && typeof p.y === "number") {
+            valid[name] = p;
+          }
+        });
+        return valid;
+      } catch (e) {
+        return {};
+      }
+    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(positions));
+    }
+
+    function isOnGrass(yPct) {
+      return yPct >= GRASS_TOP_PCT && yPct <= GRASS_BOTTOM_PCT;
+    }
+
+    function clampPct(v) {
+      return Math.min(97, Math.max(3, v));
+    }
+
+    function fontSizeForName(name) {
+      const len = name.length;
+      if (len <= 3) return "11px";
+      if (len <= 5) return "9.5px";
+      if (len <= 8) return "8.5px";
+      return "7.5px";
+    }
+
+    function updateCounts() {
+      const names = Object.keys(positions);
+      const onGrass = names.filter((n) => isOnGrass(positions[n].y)).length;
+      const onBench = names.length - onGrass;
+      placedCountEl.textContent = `그라운드 ${onGrass} · 벤치 ${onBench} / 전체 ${PLAYERS.length}`;
+    }
+
+    /* -------------------------------------------------------------- */
+    /* 지원자 프로필 사진 적용 (SOOP API 로 비동기 도착, 정지 프레임으로 고정)     */
+    /* -------------------------------------------------------------- */
+    function hookPhoto(name) {
+      const applicant = applicantByName.get(name);
+      if (!applicant) return;
+
+      const photoUrlPromise = applicant.photo
+        ? Promise.resolve(applicant.photo)
+        : getStationData(applicant.station).then((data) =>
+            data && data.profile_image ? protocolize(data.profile_image) : null
+          );
+
+      photoUrlPromise
+        .then((url) => (url ? loadImageEl(url) : null))
+        .then((img) => {
+          if (!img) return;
+
+          const rosterChip = rosterListEl.querySelector(`.roster-chip[data-name="${cssEscape(name)}"]`);
+          const rosterAvatar = rosterChip && rosterChip.querySelector(".roster-avatar");
+          if (rosterAvatar) paintFrozenAvatar(rosterAvatar, img, false);
+
+          const fieldChip = pitchTokensEl.querySelector(`.player-chip[data-name="${cssEscape(name)}"]`);
+          if (fieldChip) paintFrozenAvatar(fieldChip, img, true);
+        })
+        .catch(() => {});
+    }
+
+    /* -------------------------------------------------------------- */
+    /* 렌더링                                                              */
+    /* -------------------------------------------------------------- */
+    function renderRoster() {
+      rosterListEl.innerHTML = "";
+      const sorted = PLAYERS.slice().sort((a, b) => a.localeCompare(b, "ko"));
+      sorted.forEach((name) => {
+        const applicant = applicantByName.get(name);
+        const chip = document.createElement("div");
+        chip.className = "roster-chip" + (positions[name] ? " placed" : "");
+        chip.dataset.name = name;
+        chip.title = name;
+        const posColorVar = positionColorVarValue(applicant && applicant.position);
+        if (posColorVar) chip.style.setProperty("--pos-color", posColorVar);
+
+        const avatar = document.createElement("span");
+        avatar.className = "roster-avatar";
+        avatar.textContent = name.charAt(0);
+
+        const label = document.createElement("span");
+        label.className = "roster-name";
+        label.textContent = name;
+
+        chip.appendChild(avatar);
+        chip.appendChild(label);
+
+        if (applicant && applicant.position) {
+          const posBadge = document.createElement("span");
+          posBadge.className = "roster-position-badge";
+          if (posColorVar) posBadge.style.setProperty("--pos-color", posColorVar);
+          posBadge.textContent = applicant.position;
+          chip.appendChild(posBadge);
+        }
+
+        rosterListEl.appendChild(chip);
+
+        chip.addEventListener("pointerdown", (e) => startChipDrag(e, chip, name, "roster"));
+        hookPhoto(name);
+      });
+      filterRoster();
+    }
+
+    function filterRoster() {
+      const q = rosterSearchEl.value.trim().toLowerCase();
+      rosterListEl.querySelectorAll(".roster-chip").forEach((chip) => {
+        const match = chip.dataset.name.toLowerCase().includes(q);
+        chip.style.display = match ? "" : "none";
+      });
+    }
+
+    function renderPitch() {
+      const existing = new Map();
+      pitchTokensEl.querySelectorAll(".player-chip").forEach((el) => existing.set(el.dataset.name, el));
+
+      existing.forEach((el, name) => {
+        if (!Object.prototype.hasOwnProperty.call(positions, name)) el.remove();
+      });
+
+      Object.keys(positions).forEach((name) => {
+        const p = positions[name];
+        const chip = existing.get(name);
+        if (chip) {
+          moveChipTo(chip, p.x, p.y);
+        } else {
+          const newChip = createChip(name, p.x, p.y);
+          pitchTokensEl.appendChild(newChip);
+          hookPhoto(name);
+        }
+      });
+    }
+
+    function moveChipTo(chip, xPct, yPct) {
+      chip.style.left = xPct + "%";
+      chip.style.top = yPct + "%";
+      chip.classList.toggle("player-chip--bench-zone", !isOnGrass(yPct));
+    }
+
+    function renderAll() {
+      renderRoster();
+      renderPitch();
+      updateCounts();
+    }
+
+    /* -------------------------------------------------------------- */
+    /* 선수 칩 (그라운드 / 벤치 공용)                                        */
+    /* -------------------------------------------------------------- */
+    function createChip(name, xPct, yPct) {
+      const applicant = applicantByName.get(name);
+      const chip = document.createElement("div");
+      chip.className = "player-chip player-chip--field" + (isOnGrass(yPct) ? "" : " player-chip--bench-zone");
+      chip.dataset.name = name;
+      chip.title = name;
+      chip.style.left = xPct + "%";
+      chip.style.top = yPct + "%";
+      const posColorVar = positionColorVarValue(applicant && applicant.position);
+      if (posColorVar) chip.style.setProperty("--pos-color", posColorVar);
+
+      const nameEl = document.createElement("span");
+      nameEl.className = "token-name";
+      nameEl.style.fontSize = fontSizeForName(name);
+      nameEl.textContent = name;
+      chip.appendChild(nameEl);
+
+      const removeBtn = document.createElement("span");
+      removeBtn.className = "token-remove";
+      removeBtn.textContent = "×";
+      removeBtn.title = "명단으로 되돌리기";
+      chip.appendChild(removeBtn);
+
+      removeBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+      removeBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        sendToRoster(name);
+        saveState();
+        renderAll();
+      });
+
+      chip.addEventListener("pointerdown", (e) => startChipDrag(e, chip, name, "placed"));
+
+      return chip;
+    }
+
+    /* -------------------------------------------------------------- */
+    /* 상태 전환 헬퍼                                                       */
+    /* -------------------------------------------------------------- */
+    function sendToPitch(name, xPct, yPct) {
+      positions[name] = { x: clampPct(xPct), y: clampPct(yPct) };
+    }
+
+    function sendToRoster(name) {
+      delete positions[name];
+    }
+
+    function swapWithChip(name, targetName, dropXPct, dropYPct) {
+      if (!targetName || targetName === name) {
+        sendToPitch(name, dropXPct, dropYPct);
+        return;
+      }
+      const targetPos = positions[targetName] ? { ...positions[targetName] } : { x: clampPct(dropXPct), y: clampPct(dropYPct) };
+      const sourcePos = positions[name] ? { ...positions[name] } : null;
+
+      positions[targetName] = sourcePos ? sourcePos : undefined;
+      if (!sourcePos) delete positions[targetName];
+      positions[name] = targetPos;
+    }
+
+    /* -------------------------------------------------------------- */
+    /* 드래그 앤 드롭 (명단 <-> 그라운드/벤치 공용 판)                             */
+    /* -------------------------------------------------------------- */
+    let highlightedZoneEl = null;
+
+    function resolveDropZone(clientX, clientY) {
+      const pitchRect = pitchTokensEl.getBoundingClientRect();
+      if (clientX >= pitchRect.left && clientX <= pitchRect.right && clientY >= pitchRect.top && clientY <= pitchRect.bottom) {
+        return {
+          type: "pitch",
+          xPct: ((clientX - pitchRect.left) / pitchRect.width) * 100,
+          yPct: ((clientY - pitchRect.top) / pitchRect.height) * 100,
+        };
+      }
+      const rosterRect = rosterListEl.getBoundingClientRect();
+      if (clientX >= rosterRect.left && clientX <= rosterRect.right && clientY >= rosterRect.top && clientY <= rosterRect.bottom) {
+        return { type: "roster" };
+      }
+      return null;
+    }
+
+    function zoneHighlightEl(zoneType) {
+      if (zoneType === "pitch") return pitchEl;
+      if (zoneType === "roster") return rosterPanelEl;
+      return null;
+    }
+
+    function updateDropHighlight(clientX, clientY) {
+      const zone = resolveDropZone(clientX, clientY);
+      const target = zone ? zoneHighlightEl(zone.type) : null;
+      if (highlightedZoneEl && highlightedZoneEl !== target) highlightedZoneEl.classList.remove("drop-target");
+      if (target) target.classList.add("drop-target");
+      highlightedZoneEl = target;
+    }
+
+    function clearDropHighlight() {
+      if (highlightedZoneEl) highlightedZoneEl.classList.remove("drop-target");
+      highlightedZoneEl = null;
+    }
+
+    // 고스트(드래그 중 마우스를 따라다니는 칩)를 커서 위치로 옮긴다
+    function moveGhost(ghost, clientX, clientY) {
+      ghost.style.left = clientX + "px";
+      ghost.style.top = clientY + "px";
+    }
+
+    function findChipAt(clientX, clientY, excludeName) {
+      const chips = pitchTokensEl.querySelectorAll(".player-chip");
+      for (const chip of chips) {
+        if (chip.dataset.name === excludeName) continue;
+        const r = chip.getBoundingClientRect();
+        if (clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom) {
+          return chip;
+        }
+      }
+      return null;
+    }
+
+    let highlightedSwapEl = null;
+
+    function updateSwapHighlight(clientX, clientY, name) {
+      const target = findChipAt(clientX, clientY, name);
+      if (highlightedSwapEl && highlightedSwapEl !== target) highlightedSwapEl.classList.remove("swap-target");
+      if (target) target.classList.add("swap-target");
+      highlightedSwapEl = target;
+    }
+
+    function clearSwapHighlight() {
+      if (highlightedSwapEl) highlightedSwapEl.classList.remove("swap-target");
+      highlightedSwapEl = null;
+    }
+
+    // 원본 칩에 이미 그려둔 정지 프레임 캔버스를, 마우스를 따라다니는 고스트 칩에도 그대로 복사한다
+    // (원본 <img>가 아니라 캔버스를 소스로 그리기 때문에 여기서도 GIF가 움직이지 않는다)
+    function cloneAvatarCanvas(sourceCanvas) {
+      if (!sourceCanvas) return null;
+      const canvas = document.createElement("canvas");
+      canvas.className = "avatar-canvas";
+      canvas.width = sourceCanvas.width;
+      canvas.height = sourceCanvas.height;
+      canvas.getContext("2d").drawImage(sourceCanvas, 0, 0);
+      return canvas;
+    }
+
+    function startChipDrag(e, sourceEl, name, sourceType) {
+      if (e.button !== undefined && e.button !== 0) return;
+      if (sourceType === "roster" && sourceEl.classList.contains("placed")) return;
+      e.preventDefault();
+
+      const applicant = applicantByName.get(name);
+      const posColorVar = positionColorVarValue(applicant && applicant.position);
+
+      const ghost = document.createElement("div");
+      ghost.className = "player-chip player-chip--ghost";
+      if (posColorVar) ghost.style.setProperty("--pos-color", posColorVar);
+
+      // 마우스를 따라다니는 고스트가 실제 칩과 같은 크기/사진으로 보이도록 맞춘다
+      let sourceCanvas = null;
+      if (sourceType === "roster") {
+        const avatarEl = sourceEl.querySelector(".roster-avatar");
+        sourceCanvas = avatarEl && avatarEl.querySelector("canvas.avatar-canvas");
+      } else {
+        const rect = sourceEl.getBoundingClientRect();
+        ghost.style.width = rect.width + "px";
+        ghost.style.height = rect.height + "px";
+        sourceCanvas = sourceEl.querySelector(":scope > canvas.avatar-canvas");
+      }
+      const ghostCanvas = cloneAvatarCanvas(sourceCanvas);
+      if (ghostCanvas) {
+        ghost.appendChild(ghostCanvas);
+        ghost.classList.add("player-chip--photo");
+      }
+
+      const nameEl = document.createElement("span");
+      nameEl.className = "token-name";
+      nameEl.style.fontSize = fontSizeForName(name);
+      nameEl.textContent = name;
+      ghost.appendChild(nameEl);
+      document.body.appendChild(ghost);
+      moveGhost(ghost, e.clientX, e.clientY);
+
+      // 이미 배치된 칩을 옮길 때는 원본을 숨기고, 고스트만 보이게 해서
+      // "칩 자체가 마우스를 따라다니는" 것처럼 느껴지게 한다
+      if (sourceType !== "roster") sourceEl.classList.add("dragging");
+      try { sourceEl.setPointerCapture(e.pointerId); } catch (err) {}
+
+      function onMove(ev) {
+        moveGhost(ghost, ev.clientX, ev.clientY);
+        updateDropHighlight(ev.clientX, ev.clientY);
+        updateSwapHighlight(ev.clientX, ev.clientY, name);
+      }
+
+      function onUp(ev) {
+        sourceEl.removeEventListener("pointermove", onMove);
+        sourceEl.removeEventListener("pointerup", onUp);
+        sourceEl.removeEventListener("pointercancel", onUp);
+        ghost.remove();
+        clearDropHighlight();
+
+        const zone = resolveDropZone(ev.clientX, ev.clientY);
+        const swapTargetEl = findChipAt(ev.clientX, ev.clientY, name);
+        clearSwapHighlight();
+
+        if (zone) {
+          if (zone.type === "pitch") {
+            if (swapTargetEl) {
+              swapWithChip(name, swapTargetEl.dataset.name, zone.xPct, zone.yPct);
+            } else {
+              sendToPitch(name, zone.xPct, zone.yPct);
+            }
+          } else if (zone.type === "roster") {
+            sendToRoster(name);
+          }
+          saveState();
+          // 옮긴 칩이 아직 숨겨져(dragging) 있는 동안(transition:none) 위치를 먼저 최종값으로
+          // 반영해서, 원본을 다시 보여줄 때 옛 위치 → 새 위치로 슬라이드하는 게 아니라
+          // 바로 새 위치에 나타나게 한다 (잠깐 원위치로 되돌아가 보이는 깜빡임 방지)
+          renderAll();
+        }
+
+        // 위치 반영이 끝난 뒤에 원본을 다시 보이게 한다
+        if (sourceType !== "roster") sourceEl.classList.remove("dragging");
+      }
+
+      sourceEl.addEventListener("pointermove", onMove);
+      sourceEl.addEventListener("pointerup", onUp);
+      sourceEl.addEventListener("pointercancel", onUp);
+    }
+
+    /* -------------------------------------------------------------- */
+    /* 초기화                                                              */
+    /* -------------------------------------------------------------- */
+    rosterSearchEl.addEventListener("input", filterRoster);
+
+    btnClear.addEventListener("click", () => {
+      if (Object.keys(positions).length === 0) return;
+      if (!confirm("그라운드와 벤치에 배치된 지원자를 모두 명단으로 되돌릴까요?")) return;
+      positions = {};
+      renderAll();
+      saveState();
+    });
+
+    positions = loadState();
+    renderAll();
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 초기 렌더                                                              */
+  /* ------------------------------------------------------------------ */
+  async function boot() {
+    document.title = DATA.CLUB_NAME;
+    document.querySelectorAll(".club-name-slot").forEach((el) => (el.textContent = DATA.CLUB_NAME));
+
+    renderInstructors();
+
+    const liveApplicants = await loadApplicantsFromFirebase();
+    if (liveApplicants) DATA.APPLICANTS = liveApplicants;
+
+    await renderApplicants();
+    initFormationBoard();
+  }
+
+  boot();
+})();
