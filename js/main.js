@@ -338,6 +338,10 @@
       const hash = "#" + tabId;
       if (location.hash !== hash) history.pushState({ tabId }, "", hash);
     }
+    // 방금 보이게 된 탭이 전술보드/일정이면, 그 탭 크기가 화면에 맞게 다시 계산되어야 한다
+    // (안 보이는 동안엔 실측이 불가능해서 렌더 시점엔 계산을 건너뛰었음)
+    if (tabId === "tab-board") requestAnimationFrame(fitPitchToViewport);
+    if (tabId === "tab-schedule") requestAnimationFrame(fitCalendarToViewport);
   }
 
   document.querySelectorAll(".nav-tab[data-tab]").forEach((btn) => {
@@ -414,7 +418,37 @@
     }
 
     grid.innerHTML = cells.join("");
+    fitCalendarToViewport();
   }
+
+  // 1920x1080 같은 화면에서 스크롤 없이 달력이 한 화면에 다 들어오도록,
+  // 넘치는 만큼 정확히 셀 크기(정사각형)를 줄인다. (화면이 넉넉하면 그대로 둠)
+  function fitCalendarToViewport() {
+    const tab = document.getElementById("tab-schedule");
+    const grid = document.getElementById("calendar-grid");
+    if (!tab || !grid || !tab.classList.contains("active")) return;
+
+    grid.style.width = ""; // CSS 기본 크기로 되돌린 뒤 다시 측정
+
+    requestAnimationFrame(() => {
+      const overflow = document.documentElement.scrollHeight - window.innerHeight;
+      if (overflow <= 0) return;
+
+      const totalCells = grid.children.length;
+      const rows = Math.max(1, Math.ceil(totalCells / 7));
+      const gap = parseFloat(getComputedStyle(grid).rowGap) || 0;
+
+      const rect = grid.getBoundingClientRect();
+      const currentCellSize = (rect.width - gap * 6) / 7;
+      const targetCellSize = currentCellSize - (overflow + 8) / rows;
+      const targetWidth = targetCellSize * 7 + gap * 6;
+
+      const wrapWidth = grid.parentElement.getBoundingClientRect().width;
+      grid.style.width = Math.max(200, Math.min(targetWidth, wrapWidth)) + "px";
+    });
+  }
+
+  window.addEventListener("resize", fitCalendarToViewport);
 
   const calendarPrevBtn = document.getElementById("calendar-prev");
   const calendarNextBtn = document.getElementById("calendar-next");
@@ -434,6 +468,47 @@
   /* ------------------------------------------------------------------ */
   /* 전술보드 탭 — 드래그 앤 드롭 포메이션 보드 (지원자 명단 기반)             */
   /* ------------------------------------------------------------------ */
+
+  // 1920x1080 같은 화면에서 스크롤 없이 그라운드까지 한 화면에 다 들어오도록,
+  // 실제로 넘치는 만큼만 정확히 줄인다 (화면이 넉넉하면 CSS 기본 크기 그대로 둠)
+  function fitPitchToViewport() {
+    const tab = document.getElementById("tab-board");
+    const wrap = document.querySelector(".pitch-wrap");
+    const pitch = document.getElementById("pitch");
+    const rosterPanel = document.getElementById("roster-panel");
+    if (!tab || !wrap || !pitch || !tab.classList.contains("active")) return;
+
+    pitch.style.width = "";
+    pitch.style.height = "";
+    if (rosterPanel) rosterPanel.style.maxHeight = ""; // CSS 기본 크기로 되돌린 뒤 다시 측정
+
+    requestAnimationFrame(() => {
+      const overflow = document.documentElement.scrollHeight - window.innerHeight;
+      if (overflow <= 0) return;
+      const shrinkBy = overflow + 8;
+
+      // 명단 패널(roster-panel)이 그라운드보다 더 길면 걔가 전체 높이를 결정해버리니,
+      // 그라운드와 똑같이 넘치는 만큼 같이 줄인다 (명단 자체는 내부 스크롤이라 내용은 안 잘림)
+      if (rosterPanel) {
+        const curHeight = rosterPanel.getBoundingClientRect().height;
+        rosterPanel.style.maxHeight = Math.max(240, curHeight - shrinkBy) + "px";
+      }
+
+      const rect = pitch.getBoundingClientRect();
+      const targetHeight = Math.max(320, rect.height - shrinkBy);
+      const targetWidth = targetHeight * (109 / 86);
+
+      const wrapWidth = wrap.getBoundingClientRect().width;
+      const finalWidth = Math.min(targetWidth, wrapWidth);
+      const finalHeight = finalWidth * (86 / 109);
+
+      pitch.style.width = finalWidth + "px";
+      pitch.style.height = finalHeight + "px";
+    });
+  }
+
+  window.addEventListener("resize", fitPitchToViewport);
+
   const AVATAR_CANVAS_SIZE = 96; // 캔버스 내부 해상도(px). CSS로 실제 크기에 맞게 축소돼 표시됨
 
   function loadImageEl(url) {
@@ -498,7 +573,7 @@
     if (!rosterListEl || !pitchEl) return; // 전술보드 탭이 없는 페이지에서는 건너뜀
 
     let positions = {}; // name -> {x, y} (percent)
-    let rosterSortMode = "name";
+    let rosterSortMode = "position";
 
     function loadState() {
       try {
@@ -926,6 +1001,7 @@
 
     positions = loadState();
     renderAll();
+    fitPitchToViewport();
   }
 
   /* ------------------------------------------------------------------ */
