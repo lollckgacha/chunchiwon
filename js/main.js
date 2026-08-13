@@ -77,22 +77,37 @@
     return POSITION_GROUP_BY_TOKEN[tokens[0]] || null;
   }
 
-  // "var(--pos-mf)" 같은 참조 문자열 (알 수 없는 포지션이면 null → 각 컴포넌트 기본색 유지)
+  // "var(--pos-mf)" 같은 참조 문자열. 포지션이 비어있거나 못 알아보는 표기면
+  // --pos-none(흰색)을 돌려줘서 "포지션 미정 = 흰 테두리"가 항상 성립하게 한다.
   function positionColorVarValue(position) {
     const group = primaryPositionGroup(position);
-    return group ? `var(--pos-${group})` : null;
+    return `var(--pos-${group || "none"})`;
   }
 
   // HTML 템플릿의 style 속성에 그대로 넣을 수 있는 CSS 변수 선언 문자열
   function positionColorStyle(position) {
-    const value = positionColorVarValue(position);
-    return value ? `--pos-color:${value}` : "";
+    return `--pos-color:${positionColorVarValue(position)}`;
   }
 
   function positionBadgeHTML(position, extraClass) {
     if (!position) return "";
     const style = positionColorStyle(position);
     return `<span class="position-badge${extraClass ? " " + extraClass : ""}"${style ? ` style="${style}"` : ""}>${esc(position)}</span>`;
+  }
+
+  // 정렬 공용 비교 함수 (지통실 정렬 필터 / 전술보드 명단 정렬에서 함께 사용)
+  function sortByName(a, b) {
+    return a.name.localeCompare(b.name, "ko");
+  }
+
+  function sortByPosition(a, b) {
+    const order = ["gk", "df", "mf", "fw"];
+    const gx = primaryPositionGroup(a.position);
+    const gy = primaryPositionGroup(b.position);
+    const ix = gx ? order.indexOf(gx) : order.length;
+    const iy = gy ? order.indexOf(gy) : order.length;
+    if (ix !== iy) return ix - iy;
+    return sortByName(a, b);
   }
 
   /* ------------------------------------------------------------------ */
@@ -129,66 +144,77 @@
     const grid = document.getElementById("instructor-grid");
     if (!grid) return;
     grid.innerHTML = DATA.INSTRUCTORS.map((m) => {
-      const stationBtn = m.station
-        ? `<a class="instructor-station-btn" href="${esc(stationUrl(m.station))}" target="_blank" rel="noopener noreferrer">📡 방송국</a>`
+      // 방송국이 있으면 카드 전체를 방송국으로 가는 링크(<a>)로, 없으면 그냥 <div>로 렌더
+      const tag = m.station ? "a" : "div";
+      const linkAttrs = m.station
+        ? ` href="${esc(stationUrl(m.station))}" target="_blank" rel="noopener noreferrer"`
         : "";
       return `
-      <div class="instructor-card">
+      <${tag} class="instructor-card"${linkAttrs}>
         <div class="instructor-photo-wrap">
           <img class="instructor-photo" src="${imgSrc(m.photo)}" alt="${esc(m.name)}" loading="lazy" />
         </div>
         <div class="instructor-role">${esc(m.role)}</div>
         <div class="instructor-name">${esc(m.name)}</div>
-        ${stationBtn}
-      </div>`;
+      </${tag}>`;
     }).join("");
   }
 
-  /* ------------------------------------------------------------------ */
-  /* 지원글 팝업                                                          */
-  /* ------------------------------------------------------------------ */
-  const postModal = document.getElementById("post-modal");
-  const postModalBody = document.getElementById("post-modal-body");
-
-  function openPostModal(applicant) {
-    if (!postModal || !postModalBody) return;
-    const bodyText = applicant.postText && applicant.postText.trim()
-      ? esc(applicant.postText)
-      : "아직 지원 내용을 불러오지 못했어요.";
-    postModalBody.innerHTML = `
-      <h3 class="post-modal-name">${esc(applicant.name)} 지원글</h3>
-      <div class="post-modal-text">${bodyText}</div>
-      <a class="post-modal-link" href="${esc(DATA.POST_URL)}" target="_blank" rel="noopener noreferrer">원본 게시글에서 보기 ↗</a>
-    `;
-    postModal.classList.add("open");
-  }
-
-  function closePostModal() {
-    if (postModal) postModal.classList.remove("open");
-  }
-
-  if (postModal) {
-    postModal.addEventListener("click", (e) => {
-      if (e.target === postModal || e.target.closest("[data-close-modal]")) closePostModal();
-    });
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") closePostModal();
-    });
-  }
-
-  /* ------------------------------------------------------------------ */
-  /* 지원자 탭                                                            */
-  /* ------------------------------------------------------------------ */
-  function applicantCardHTML(a) {
-    const initial = a.name.charAt(0);
-    const avatarInner = a.photo
+  // 지원자 카드/피드 공용 — 프로필 사진(있으면) 또는 이름 첫 글자 아바타
+  function avatarInnerHTML(a) {
+    return a.photo
       ? `<img src="${esc(a.photo)}" alt="${esc(a.name)} 프로필" loading="lazy" />`
-      : `<span class="applicant-avatar-fallback">${esc(initial)}</span>`;
+      : `<span class="applicant-avatar-fallback">${esc(a.name.charAt(0))}</span>`;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 지원자 탭 — 지원글을 쭉 모아보는 피드                                    */
+  /* 글 자체는 네트워크 요청 없이 즉시 뜨고, 방송국 프로필 사진만 지통실처럼      */
+  /* SOOP에서 비동기로 불러와 채운다                                        */
+  /* ------------------------------------------------------------------ */
+  function postFeedItemHTML(a) {
+    const style = positionColorStyle(a.position);
+    const text = a.postText && a.postText.trim() ? esc(a.postText) : "(지원글이 아직 없어요)";
+    return `
+    <article class="post-feed-item" style="${style}">
+      <header class="post-feed-header">
+        <div class="applicant-avatar post-feed-avatar" data-role="avatar" data-station="${esc(a.station)}">${avatarInnerHTML(a)}</div>
+        <span class="post-feed-name">${esc(a.name)}</span>
+        ${positionBadgeHTML(a.position)}
+        <a class="post-feed-station" href="${esc(stationUrl(a.station))}" target="_blank" rel="noopener noreferrer">@${esc(a.station)} ↗</a>
+      </header>
+      <div class="post-feed-text">${text}</div>
+    </article>`;
+  }
+
+  function renderPostFeed() {
+    const feed = document.getElementById("post-feed");
+    const countEl = document.getElementById("post-feed-count");
+    if (!feed) return;
+
+    const sorted = DATA.APPLICANTS.slice().sort((a, b) => a.name.localeCompare(b.name, "ko"));
+    feed.innerHTML = sorted.map(postFeedItemHTML).join("");
+    if (countEl) countEl.textContent = `총 ${DATA.APPLICANTS.length}명 지원`;
+
+    sorted.forEach((a) => {
+      if (a.photo) return; // 시트에 사진이 직접 지정돼 있으면 이미 채워져 있으니 건너뜀
+      getStationData(a.station).then((data) => {
+        if (!data || !data.profile_image) return;
+        const avatarEl = feed.querySelector(`.post-feed-avatar[data-station="${cssEscape(a.station)}"]`);
+        if (avatarEl) avatarEl.innerHTML = `<img src="${esc(protocolize(data.profile_image))}" alt="${esc(a.name)} 프로필" loading="lazy" />`;
+      });
+    });
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 지통실 탭 — SOOP 실시간 방송 현황판 (사진/썸네일/방송중 여부 + 정렬)       */
+  /* ------------------------------------------------------------------ */
+  function controlCardHTML(a) {
     const cardStyle = positionColorStyle(a.position);
     return `
-    <div class="applicant-card"${cardStyle ? ` style="${cardStyle}"` : ""} data-station="${esc(a.station)}">
+    <div class="applicant-card" style="${cardStyle}" data-station="${esc(a.station)}">
       <div class="applicant-head">
-        <div class="applicant-avatar" data-role="avatar">${avatarInner}</div>
+        <div class="applicant-avatar" data-role="avatar">${avatarInnerHTML(a)}</div>
         <div class="applicant-head-text">
           <div class="applicant-name">${esc(a.name)}</div>
           <div class="applicant-id">@${esc(a.station)}</div>
@@ -201,47 +227,47 @@
       </div>
       <div class="applicant-actions">
         <a class="btn-station" href="${esc(stationUrl(a.station))}" target="_blank" rel="noopener noreferrer">📡 방송국</a>
-        <button type="button" class="btn-post" data-station="${esc(a.station)}">📝 지원글</button>
       </div>
     </div>`;
   }
 
-  // 방송 중인 사람이 먼저, 그 안에서는(비방송자끼리도) 가나다순으로 정렬
-  async function renderApplicants() {
-    const grid = document.getElementById("applicant-grid");
-    const countEl = document.getElementById("applicant-count");
-    if (!grid) return;
+  function isLiveEntry(entry) {
+    return !!(entry.data && entry.data.broad && entry.data.broad.broad_no);
+  }
 
-    grid.innerHTML = `<p class="applicant-loading">지원자 목록을 불러오는 중...</p>`;
+  // 방송 중인 사람이 항상 먼저 오고, 그 안에서 포지션별/가나다순으로 다시 정렬
+  function withLiveFirst(compare) {
+    return (x, y) => {
+      const liveX = isLiveEntry(x) ? 1 : 0;
+      const liveY = isLiveEntry(y) ? 1 : 0;
+      if (liveX !== liveY) return liveY - liveX;
+      return compare(x.a, y.a);
+    };
+  }
 
-    const withStationData = await Promise.all(
-      DATA.APPLICANTS.map((a) => getStationData(a.station).then((data) => ({ a, data })))
-    );
+  const CONTROL_SORTERS = {
+    position: withLiveFirst(sortByPosition),
+    name: withLiveFirst(sortByName),
+  };
 
-    withStationData.sort((x, y) => {
-      const liveX = x.data && x.data.broad && x.data.broad.broad_no ? 1 : 0;
-      const liveY = y.data && y.data.broad && y.data.broad.broad_no ? 1 : 0;
-      if (liveX !== liveY) return liveY - liveX; // 방송 중(1)이 먼저
-      return x.a.name.localeCompare(y.a.name, "ko");
-    });
+  let controlRoomData = null; // [{a, data}] — SOOP 조회 결과 캐시 (정렬 바꿀 때 재요청 안 하도록)
+  let controlSortMode = "position";
 
-    grid.innerHTML = withStationData.map(({ a }) => applicantCardHTML(a)).join("");
-    if (countEl) countEl.textContent = `총 ${DATA.APPLICANTS.length}명 지원`;
+  function renderControlGrid() {
+    const grid = document.getElementById("control-grid");
+    if (!grid || !controlRoomData) return;
 
-    grid.querySelectorAll(".btn-post").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const applicant = DATA.APPLICANTS.find((a) => a.station === btn.dataset.station);
-        if (applicant) openPostModal(applicant);
-      });
-    });
+    const sorted = controlRoomData.slice().sort(CONTROL_SORTERS[controlSortMode] || CONTROL_SORTERS.live);
 
-    withStationData.forEach(({ a, data }) => {
+    grid.innerHTML = sorted.map(({ a }) => controlCardHTML(a)).join("");
+
+    sorted.forEach(({ a, data }) => {
       const card = grid.querySelector(`.applicant-card[data-station="${cssEscape(a.station)}"]`);
-      if (card) applyStationDataToApplicantCard(card, a, data);
+      if (card) applyStationDataToControlCard(card, a, data);
     });
   }
 
-  function applyStationDataToApplicantCard(card, applicant, data) {
+  function applyStationDataToControlCard(card, applicant, data) {
     const avatarEl = card.querySelector('[data-role="avatar"]');
     const thumbEl = card.querySelector('[data-role="thumb"]');
     const liveBadgeEl = card.querySelector('[data-role="live-badge"]');
@@ -267,21 +293,143 @@
         thumbEl.title = data.broad.broad_title;
       }
     } else {
+      // 방송 중이 아닌 카드는 CSS(.applicant-card:not(.is-live))로 어둡게 표시됨
       thumbEl.innerHTML = `<div class="applicant-thumb-offline"><span>현재 방송 중이 아니에요</span></div>`;
     }
   }
 
-  /* ------------------------------------------------------------------ */
-  /* 상단 탭 전환                                                          */
-  /* ------------------------------------------------------------------ */
-  document.querySelectorAll(".nav-tab[data-tab]").forEach((btn) => {
+  async function renderControlRoom() {
+    const grid = document.getElementById("control-grid");
+    const countEl = document.getElementById("control-count");
+    if (!grid) return;
+
+    grid.innerHTML = `<p class="applicant-loading">지원자 목록을 불러오는 중...</p>`;
+
+    controlRoomData = await Promise.all(
+      DATA.APPLICANTS.map((a) => getStationData(a.station).then((data) => ({ a, data })))
+    );
+
+    if (countEl) countEl.textContent = `총 ${DATA.APPLICANTS.length}명 지원`;
+    renderControlGrid();
+  }
+
+  document.querySelectorAll(".control-toolbar .sort-btn[data-sort]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      document.querySelectorAll(".nav-tab[data-tab]").forEach((b) => b.classList.remove("active"));
-      document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
+      if (btn.dataset.sort === controlSortMode) return;
+      controlSortMode = btn.dataset.sort;
+      document.querySelectorAll(".control-toolbar .sort-btn[data-sort]").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
-      document.getElementById(btn.dataset.tab).classList.add("active");
+      renderControlGrid();
     });
   });
+
+  /* ------------------------------------------------------------------ */
+  /* 상단 탭 전환 — URL 해시로 기록해서 브라우저 뒤로/앞으로가기로도 이동 가능      */
+  /* ------------------------------------------------------------------ */
+  const TAB_IDS = Array.from(document.querySelectorAll(".nav-tab[data-tab]")).map((b) => b.dataset.tab);
+  const DEFAULT_TAB_ID = TAB_IDS[0];
+
+  function activateTab(tabId, opts) {
+    opts = opts || {};
+    if (!TAB_IDS.includes(tabId)) return;
+    document.querySelectorAll(".nav-tab[data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === tabId));
+    document.querySelectorAll(".tab-panel").forEach((p) => p.classList.toggle("active", p.id === tabId));
+    if (opts.push !== false) {
+      const hash = "#" + tabId;
+      if (location.hash !== hash) history.pushState({ tabId }, "", hash);
+    }
+  }
+
+  document.querySelectorAll(".nav-tab[data-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => activateTab(btn.dataset.tab));
+  });
+
+  window.addEventListener("popstate", (e) => {
+    const tabId = (e.state && e.state.tabId) || (location.hash || "").replace("#", "") || DEFAULT_TAB_ID;
+    activateTab(tabId, { push: false });
+  });
+
+  // 처음 들어왔을 때 주소에 탭 해시가 있으면 그 탭으로 시작하고,
+  // 없으면 기본 탭으로 히스토리를 한 번 정리해둬서 이후 뒤로가기가 자연스럽게 동작하게 한다
+  const initialTabId = (location.hash || "").replace("#", "");
+  if (TAB_IDS.includes(initialTabId)) {
+    activateTab(initialTabId, { push: false });
+  } else {
+    history.replaceState({ tabId: DEFAULT_TAB_ID }, "", "#" + DEFAULT_TAB_ID);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 일정 탭 — 달력 (기본: 2026년 8월, 좌우 화살표로 다른 달도 볼 수 있음)      */
+  /* ------------------------------------------------------------------ */
+  function formatTimeKo(hhmm) {
+    if (!hhmm) return "";
+    const [h, m] = hhmm.split(":").map(Number);
+    const period = h < 12 ? "오전" : "오후";
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return m ? `${period} ${h12}시 ${m}분` : `${period} ${h12}시`;
+  }
+
+  let calendarViewDate = new Date(2026, 7, 1); // 2026년 8월 (월은 0부터 시작하므로 7)
+
+  function renderCalendar() {
+    const grid = document.getElementById("calendar-grid");
+    const label = document.getElementById("calendar-month-label");
+    if (!grid) return;
+
+    const year = calendarViewDate.getFullYear();
+    const month = calendarViewDate.getMonth();
+    if (label) label.textContent = `${year}년 ${month + 1}월`;
+
+    const eventsByDate = {};
+    (DATA.SCHEDULE || []).forEach((ev) => {
+      (eventsByDate[ev.date] = eventsByDate[ev.date] || []).push(ev);
+    });
+
+    const startWeekday = new Date(year, month, 1).getDay(); // 0=일
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    const cells = [];
+    for (let i = 0; i < startWeekday; i++) {
+      cells.push(`<div class="calendar-cell calendar-cell--empty"></div>`);
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      const iso = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      const events = eventsByDate[iso] || [];
+      const weekday = new Date(year, month, d).getDay();
+      const weekdayClass = weekday === 0 ? " calendar-cell--sun" : weekday === 6 ? " calendar-cell--sat" : "";
+      const eventsHTML = events
+        .map(
+          (ev) => `
+        <div class="calendar-event">
+          ${ev.time ? `<span class="calendar-event-time">${esc(formatTimeKo(ev.time))}</span>` : ""}
+          <span class="calendar-event-title">${esc(ev.title)}</span>
+        </div>`
+        )
+        .join("");
+      cells.push(`
+        <div class="calendar-cell${weekdayClass}${events.length ? " has-event" : ""}">
+          <span class="calendar-day-num">${d}</span>
+          ${eventsHTML}
+        </div>`);
+    }
+
+    grid.innerHTML = cells.join("");
+  }
+
+  const calendarPrevBtn = document.getElementById("calendar-prev");
+  const calendarNextBtn = document.getElementById("calendar-next");
+  if (calendarPrevBtn) {
+    calendarPrevBtn.addEventListener("click", () => {
+      calendarViewDate = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() - 1, 1);
+      renderCalendar();
+    });
+  }
+  if (calendarNextBtn) {
+    calendarNextBtn.addEventListener("click", () => {
+      calendarViewDate = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() + 1, 1);
+      renderCalendar();
+    });
+  }
 
   /* ------------------------------------------------------------------ */
   /* 전술보드 탭 — 드래그 앤 드롭 포메이션 보드 (지원자 명단 기반)             */
@@ -350,6 +498,7 @@
     if (!rosterListEl || !pitchEl) return; // 전술보드 탭이 없는 페이지에서는 건너뜀
 
     let positions = {}; // name -> {x, y} (percent)
+    let rosterSortMode = "name";
 
     function loadState() {
       try {
@@ -430,7 +579,8 @@
     /* -------------------------------------------------------------- */
     function renderRoster() {
       rosterListEl.innerHTML = "";
-      const sorted = PLAYERS.slice().sort((a, b) => a.localeCompare(b, "ko"));
+      const comparator = rosterSortMode === "position" ? sortByPosition : sortByName;
+      const sorted = DATA.APPLICANTS.slice().sort(comparator).map((a) => a.name);
       sorted.forEach((name) => {
         const applicant = applicantByName.get(name);
         const chip = document.createElement("div");
@@ -756,6 +906,16 @@
     /* -------------------------------------------------------------- */
     rosterSearchEl.addEventListener("input", filterRoster);
 
+    document.querySelectorAll(".roster-sort-btn[data-sort]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (btn.dataset.sort === rosterSortMode) return;
+        rosterSortMode = btn.dataset.sort;
+        document.querySelectorAll(".roster-sort-btn[data-sort]").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        renderRoster(); // 그라운드에 놓인 배치는 그대로 두고 명단 목록 순서만 바뀜
+      });
+    });
+
     btnClear.addEventListener("click", () => {
       if (Object.keys(positions).length === 0) return;
       if (!confirm("그라운드와 벤치에 배치된 지원자를 모두 명단으로 되돌릴까요?")) return;
@@ -795,7 +955,9 @@
       });
     }
 
-    await renderApplicants();
+    renderPostFeed();
+    renderCalendar();
+    await renderControlRoom();
     initFormationBoard();
   }
 

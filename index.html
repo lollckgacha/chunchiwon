@@ -24,6 +24,8 @@
     <nav class="nav-tabs">
       <button class="nav-tab active" data-tab="tab-instructors">강사진</button>
       <button class="nav-tab" data-tab="tab-applicants">지원자</button>
+      <button class="nav-tab" data-tab="tab-control">지통실</button>
+      <button class="nav-tab" data-tab="tab-schedule">일정</button>
       <button class="nav-tab" data-tab="tab-board">전술보드</button>
     </nav>
   </div>
@@ -40,16 +42,58 @@
     <div id="instructor-grid" class="instructor-grid"></div>
   </section>
 
-  <!-- ================= 지원자 ================= -->
+  <!-- ================= 지원자 (지원글 모아보기) ================= -->
   <section id="tab-applicants" class="tab-panel">
     <div class="section-head">
       <h2 class="section-title">지원자</h2>
-      <span class="section-sub" id="applicant-count">0명 지원</span>
+      <span class="section-sub" id="post-feed-count">0명 지원</span>
     </div>
     <p class="applicant-source-note">
-      모집 게시글 댓글로 지원한 스트리머 명단이에요. 프로필 사진과 방송 썸네일은 SOOP(숲)에서 실시간으로 불러와요.
+      모집 게시글 댓글로 지원한 스트리머들의 지원글이에요.
     </p>
-    <div id="applicant-grid" class="applicant-grid"></div>
+    <div id="post-feed" class="post-feed"></div>
+  </section>
+
+  <!-- ================= 지통실 (방송 현황판) ================= -->
+  <section id="tab-control" class="tab-panel">
+    <div class="section-head">
+      <h2 class="section-title">지통실</h2>
+      <span class="section-sub" id="control-count">0명 지원</span>
+    </div>
+    <p class="applicant-source-note">
+      프로필 사진과 방송 썸네일은 SOOP(숲)에서 실시간으로 불러와요. 방송 중이 아닌 스트리머는 흐리게 표시돼요.
+    </p>
+    <div class="control-toolbar">
+      <span class="control-toolbar-label">정렬 (🔴 방송중인 사람이 항상 먼저 와요)</span>
+      <button class="sort-btn active" data-sort="position">⚽ 포지션별</button>
+      <button class="sort-btn" data-sort="name">가나다순</button>
+    </div>
+    <div id="control-grid" class="applicant-grid"></div>
+  </section>
+
+  <!-- ================= 일정 ================= -->
+  <section id="tab-schedule" class="tab-panel">
+    <div class="section-head">
+      <h2 class="section-title">일정</h2>
+      <span class="section-sub club-name-slot">천치원 시즌2</span>
+    </div>
+
+    <div class="calendar-toolbar">
+      <button id="calendar-prev" class="calendar-nav-btn" aria-label="이전 달">‹</button>
+      <span id="calendar-month-label" class="calendar-month-label">2026년 8월</span>
+      <button id="calendar-next" class="calendar-nav-btn" aria-label="다음 달">›</button>
+    </div>
+
+    <div class="calendar-weekdays">
+      <span class="calendar-weekday calendar-weekday--sun">일</span>
+      <span class="calendar-weekday">월</span>
+      <span class="calendar-weekday">화</span>
+      <span class="calendar-weekday">수</span>
+      <span class="calendar-weekday">목</span>
+      <span class="calendar-weekday">금</span>
+      <span class="calendar-weekday calendar-weekday--sat">토</span>
+    </div>
+    <div id="calendar-grid" class="calendar-grid"></div>
   </section>
 
   <!-- ================= 전술보드 ================= -->
@@ -69,6 +113,10 @@
       <aside id="roster-panel" class="roster-panel panel">
         <h2 class="panel-title">👥 지원자 명단</h2>
         <input id="roster-search" class="roster-search" type="text" placeholder="닉네임 검색..." autocomplete="off" />
+        <div class="roster-sort-toolbar">
+          <button class="sort-btn roster-sort-btn active" data-sort="name">가나다순</button>
+          <button class="sort-btn roster-sort-btn" data-sort="position">⚽ 포지션별</button>
+        </div>
         <div id="roster-list" class="roster-list"></div>
       </aside>
 
@@ -137,14 +185,6 @@
 <footer class="site-footer">
   <span class="club-name-slot">천치원 시즌2</span> · 비공식 팬 프로젝트
 </footer>
-
-<!-- 지원글 팝업 -->
-<div id="post-modal" class="modal-overlay">
-  <div class="modal-box post-modal-box">
-    <button class="modal-close" data-close-modal>&times;</button>
-    <div id="post-modal-body" class="modal-body"></div>
-  </div>
-</div>
 
 <script src="js/data.js"></script>
 <script src="js/main.js"></script>

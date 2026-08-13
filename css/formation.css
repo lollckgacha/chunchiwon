@@ -60,7 +60,7 @@
 .drop-target {
   outline: 2px dashed var(--fc-green);
   outline-offset: -6px;
-  background: rgba(0, 255, 133, 0.06);
+  background: rgba(83, 247, 186, 0.06);
 }
 
 /* ---------------------------------------------------------------- */
@@ -84,6 +84,19 @@
 .roster-search:focus {
   outline: none;
   border-color: var(--fc-green-dim);
+}
+
+.roster-sort-toolbar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.roster-sort-toolbar .sort-btn {
+  flex: 1;
+  padding: 6px 8px;
+  font-size: 0.72rem;
+  text-align: center;
 }
 
 .roster-list {
@@ -128,7 +141,7 @@
 }
 
 .roster-chip:hover {
-  background: rgba(0, 255, 133, 0.08);
+  background: rgba(83, 247, 186, 0.08);
 }
 
 .roster-chip.placed {
@@ -170,8 +183,8 @@
   letter-spacing: 0.3px;
   padding: 2px 6px;
   border-radius: 999px;
-  border: 1px solid var(--pos-color, var(--fc-text-dim));
-  color: var(--pos-color, var(--fc-text-dim));
+  border: 1px solid var(--pos-color, var(--pos-none));
+  color: var(--pos-color, var(--pos-none));
 }
 
 /* ---------------------------------------------------------------- */
@@ -263,7 +276,7 @@
 
 .player-chip.dragging {
   cursor: grabbing;
-  box-shadow: 0 0 0 3px rgba(0, 255, 133, 0.4), 0 10px 24px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 0 0 3px rgba(83, 247, 186, 0.4), 0 10px 24px rgba(0, 0, 0, 0.55);
   z-index: 30;
   /* 옮기는 동안 원본은 숨기고 고스트만 보이게 해서, 칩 자체가 마우스를
      따라다니는 것처럼 보이게 한다 (명단 칩은 이 클래스가 안 붙어 그대로 남음) */
@@ -272,8 +285,8 @@
 
 /* 드래그 중인 선수를 이 칩 위에 놓으면 서로 자리를 바꿈 */
 .player-chip.swap-target {
-  border-color: var(--fc-gold);
-  box-shadow: 0 0 0 3px rgba(255, 209, 102, 0.5), 0 10px 24px rgba(0, 0, 0, 0.55);
+  border-color: var(--fc-text);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.5), 0 10px 24px rgba(0, 0, 0, 0.55);
   transform: translate(-50%, -50%) scale(1.12);
   z-index: 20;
 }
