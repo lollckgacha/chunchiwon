@@ -766,8 +766,23 @@
 
     renderInstructors();
 
+    // data.js 의 예비 명단(포지션 등 포함)을 station 기준으로 보관해뒀다가,
+    // Firebase 쪽 데이터에 특정 필드가 비어있으면 여기서 채워 넣는다.
+    // (예: 포지션 컬럼을 추가하기 전 버전의 Apps Script로 이미 보낸 적이 있어서
+    //  Firebase에는 position이 없는 경우에도 사이트에서 색이 안 사라지도록)
+    const fallbackByStation = new Map(DATA.APPLICANTS.map((a) => [a.station, a]));
+
     const liveApplicants = await loadApplicantsFromFirebase();
-    if (liveApplicants) DATA.APPLICANTS = liveApplicants;
+    if (liveApplicants) {
+      DATA.APPLICANTS = liveApplicants.map((a) => {
+        const fb = fallbackByStation.get(a.station);
+        return {
+          ...a,
+          position: a.position || (fb && fb.position) || "",
+          photo: a.photo || (fb && fb.photo) || "",
+        };
+      });
+    }
 
     await renderApplicants();
     initFormationBoard();
