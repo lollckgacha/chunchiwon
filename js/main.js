@@ -497,9 +497,20 @@
     }
 
     function moveChipTo(chip, xPct, yPct) {
+      // 방금 내가 직접 드래그해서 놓은 칩(dragging 클래스가 아직 남아있음)은
+      // CSS 트랜지션에 기대지 않고 인라인으로 강제로 즉시 이동시킨다.
+      // (다른 선수와 자리를 바꿔서 "밀려나는" 칩은 여기 해당 안 되니 계속 부드럽게 슬라이드됨)
+      const isBeingDropped = chip.classList.contains("dragging");
+      if (isBeingDropped) chip.style.transition = "none";
+
       chip.style.left = xPct + "%";
       chip.style.top = yPct + "%";
       chip.classList.toggle("player-chip--bench-zone", !isOnGrass(yPct));
+
+      if (isBeingDropped) {
+        void chip.offsetWidth; // 강제 리플로우: 트랜지션 없이 위치가 바로 반영되게 확정
+        chip.style.transition = "";
+      }
     }
 
     function renderAll() {
