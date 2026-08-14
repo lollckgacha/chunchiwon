@@ -286,13 +286,24 @@
   let controlRoomData = null; // [{a, data}] — SOOP 조회 결과 캐시 (정렬 바꿀 때 재요청 안 하도록)
   let controlSortMode = "position";
 
+  // SOOP "EA Sports FC 26" 카테고리 번호(broad_cate_no) — 실제로 그 카테고리에서
+  // 방송 중인 스트리머(김웰로/이루희 등)의 bjapi 응답을 직접 확인해서 얻은 값
+  const FC26_CATE_NO = 40354;
+  let controlOnlyFC26 = true; // "잔디만" 필터 — 기본값으로 켜져 있음
+
   function renderControlGrid() {
     const grid = document.getElementById("control-grid");
     if (!grid || !controlRoomData) return;
 
-    const sorted = controlRoomData.slice().sort(CONTROL_SORTERS[controlSortMode] || CONTROL_SORTERS.live);
+    const filtered = controlOnlyFC26
+      ? controlRoomData.filter(({ data }) => data && data.broad && data.broad.broad_cate_no === FC26_CATE_NO)
+      : controlRoomData;
 
-    grid.innerHTML = sorted.map(({ a }) => controlCardHTML(a)).join("");
+    const sorted = filtered.slice().sort(CONTROL_SORTERS[controlSortMode] || CONTROL_SORTERS.live);
+
+    grid.innerHTML = sorted.length
+      ? sorted.map(({ a }) => controlCardHTML(a)).join("")
+      : `<p class="applicant-loading">지금 EA Sports FC 26을 방송 중인 지원자가 없어요.</p>`;
 
     sorted.forEach(({ a, data }) => {
       const card = grid.querySelector(`.applicant-card[data-station="${cssEscape(a.station)}"]`);
@@ -355,6 +366,15 @@
       renderControlGrid();
     });
   });
+
+  const controlOnlyFC26Btn = document.getElementById("control-only-fc26");
+  if (controlOnlyFC26Btn) {
+    controlOnlyFC26Btn.addEventListener("click", () => {
+      controlOnlyFC26 = !controlOnlyFC26;
+      controlOnlyFC26Btn.classList.toggle("active", controlOnlyFC26);
+      renderControlGrid();
+    });
+  }
 
   /* ------------------------------------------------------------------ */
   /* 상단 탭 전환 — URL 해시로 기록해서 브라우저 뒤로/앞으로가기로도 이동 가능      */
