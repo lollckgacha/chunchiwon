@@ -60,6 +60,12 @@ a { color: inherit; }
   border-bottom: 1px solid var(--fc-panel-border);
 }
 
+/* 전술보드 탭에서는 상단 바를 고정하지 않는다 — 아래로 스크롤하면 진짜로
+   화면 밖으로 넘어가서, 큰 그라운드만 화면 가득 보이는 프레젠테이션 모드가 된다 */
+body.board-active .topbar {
+  position: static;
+}
+
 .topbar-inner {
   max-width: 1600px;
   margin: 0 auto;
@@ -279,12 +285,6 @@ main {
 /* ---------------------------------------------------------------- */
 /* 지원자 — 지원글 피드                                                  */
 /* ---------------------------------------------------------------- */
-.applicant-source-note {
-  color: var(--fc-text-dim);
-  font-size: 0.85rem;
-  margin: -8px 0 20px;
-}
-
 .post-feed {
   display: flex;
   flex-direction: column;
@@ -338,13 +338,6 @@ main {
   flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 20px;
-}
-
-.control-toolbar-label {
-  color: var(--fc-text-dim);
-  font-size: 0.8rem;
-  font-weight: 700;
-  margin-right: 4px;
 }
 
 .sort-btn {

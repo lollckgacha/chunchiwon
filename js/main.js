@@ -51,6 +51,11 @@
     return `https://www.sooplive.com/station/${encodeURIComponent(station)}`;
   }
 
+  // 방송 중인 특정 생방송으로 바로 들어가는 시청 페이지 주소 (예: play.sooplive.com/아이디/방송번호)
+  function playUrl(station, broadNo) {
+    return `https://play.sooplive.com/${encodeURIComponent(station)}/${encodeURIComponent(broadNo)}`;
+  }
+
   /* ------------------------------------------------------------------ */
   /* 포지션 표기 -> 색상 그룹 (GK 노랑 / DF 파랑 / MF 초록 / FW 빨강)          */
   /* 다양한 표기(FB, CB, CDM, CM, CAM, WF, ST ...)를 넓게 인식한다             */
@@ -287,8 +292,8 @@
       liveBadgeEl.hidden = false;
       const thumbUrl = `https://liveimg.sooplive.co.kr/h/${data.broad.broad_no}`;
       const thumbImg = `<img class="applicant-thumb" src="${thumbUrl}" alt="${esc(applicant.name)} 방송 썸네일" loading="lazy" />`;
-      // 썸네일을 누르면 실시간 방송(방송국 페이지)으로 바로 이동
-      thumbEl.innerHTML = `<a class="applicant-thumb-link" href="${esc(stationUrl(applicant.station))}" target="_blank" rel="noopener noreferrer" title="실시간 방송 보러가기">${thumbImg}</a>`;
+      // 썸네일을 누르면 해당 생방송 시청 페이지로 바로 이동 (예: play.sooplive.com/아이디/방송번호)
+      thumbEl.innerHTML = `<a class="applicant-thumb-link" href="${esc(playUrl(applicant.station, data.broad.broad_no))}" target="_blank" rel="noopener noreferrer" title="실시간 방송 보러가기">${thumbImg}</a>`;
       if (data.broad.broad_title) {
         thumbEl.title = data.broad.broad_title;
       }
@@ -332,6 +337,7 @@
   function activateTab(tabId, opts) {
     opts = opts || {};
     if (!TAB_IDS.includes(tabId)) return;
+    const wasBoard = document.body.classList.contains("board-active");
     document.querySelectorAll(".nav-tab[data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === tabId));
     document.querySelectorAll(".tab-panel").forEach((p) => p.classList.toggle("active", p.id === tabId));
     if (opts.push !== false) {
@@ -339,9 +345,20 @@
       if (location.hash !== hash) history.pushState({ tabId }, "", hash);
     }
 
+    // 전술보드 탭에서는 상단 바 고정을 풀어서, 아래로 스크롤하면 진짜로 화면 밖으로
+    // 넘어가고 큰 그라운드만 남는 프레젠테이션 모드가 되게 한다
+    document.body.classList.toggle("board-active", tabId === "tab-board");
+    if (tabId !== "tab-board" && wasBoard) {
+      window.scrollTo(0, 0); // 그라운드 화면 보다가 다른 탭으로 넘어가면 상단 UI가 바로 보이게 되돌린다
+    }
+
     // 방금 보이게 된 탭이 전술보드/일정이면, 그 탭 크기가 화면에 맞게 다시 계산되어야 한다
     // (안 보이는 동안엔 실측이 불가능해서 렌더 시점엔 계산을 건너뛰었음)
-    if (tabId === "tab-board") fitPitchToViewport();
+    if (tabId === "tab-board") {
+      fitPitchToViewport();
+      const stage = document.querySelector(".board-stage");
+      if (stage) stage.scrollIntoView({ behavior: "auto", block: "start" });
+    }
     if (tabId === "tab-schedule") fitCalendarToViewport();
   }
 
@@ -478,44 +495,191 @@
   /* 전술보드 탭 — 드래그 앤 드롭 포메이션 보드 (지원자 명단 기반)             */
   /* ------------------------------------------------------------------ */
 
-  // 화면에 남는 세로 공간을 실측해서 그라운드(+명단 패널)를 그만큼 꽉 채운다.
-  // (공간이 부족하면 줄이고, 넉넉하면 — 예: 푸터를 뺀 만큼 — 키운다) 가로 폭은
-  // 축구장 비율(109:86)을 유지한 채로, 명단 옆 남는 폭 안에서 최대한 넓게 잡는다.
+  // tacticalboard.html처럼 그라운드가 화면을 거의 다 채우도록 크게 잡는다.
+  // 좌우 플로팅 패널(명단/도구)과는 겹치지 않고 살짝 여백이 남도록, 패널이 실제로
+  // 차지한 폭 + 여백만큼은 그라운드 너비 계산에서 제외한다 (패널을 접으면 그만큼
+  // 그라운드가 다시 넓어짐). 뷰포트 높이의 90%를 기준으로 축구장 비율(109:86)은 유지.
   function fitPitchToViewport() {
     const tab = document.getElementById("tab-board");
     const wrap = document.querySelector(".pitch-wrap");
     const pitch = document.getElementById("pitch");
-    const hint = document.querySelector(".pitch-hint");
     const rosterPanel = document.getElementById("roster-panel");
-    const mainEl = document.querySelector("main");
+    const toolsPanel = document.getElementById("tools-panel");
     if (!tab || !wrap || !pitch || !tab.classList.contains("active")) return;
 
     pitch.style.width = "";
     pitch.style.height = "";
-    if (rosterPanel) rosterPanel.style.maxHeight = "";
     // 스타일을 되돌린 직후 바로 측정하면(getBoundingClientRect 호출 시 브라우저가
     // 강제로 동기 레이아웃을 계산해줌) 프레임을 기다릴 필요 없이 바로 정확한 값을 잴 수 있다.
-    // (requestAnimationFrame은 이 페이지가 실제로 화면에 그려지고 있을 때만 불려서,
-    //  창이 최소화/백그라운드 상태면 영영 안 불릴 수 있어 여기선 쓰지 않는다)
-    const wrapTop = wrap.getBoundingClientRect().top; // 탑바+제목+툴바 등 위쪽 전체
-    const hintHeight = hint ? hint.getBoundingClientRect().height + 10 : 0; // 안내문 + 여백
-    const mainPaddingBottom = mainEl ? parseFloat(getComputedStyle(mainEl).paddingBottom) : 0;
-
-    const availableHeight = window.innerHeight - wrapTop - hintHeight - mainPaddingBottom - 4;
-    const targetHeight = Math.max(320, availableHeight);
+    const targetHeight = Math.max(360, window.innerHeight * 0.9);
     const targetWidth = targetHeight * (109 / 86);
 
-    const wrapWidth = wrap.getBoundingClientRect().width;
-    const finalWidth = Math.min(targetWidth, wrapWidth);
+    const GAP = 24; // 패널과 그라운드 사이에 남길 여백
+    const wrapRect = wrap.getBoundingClientRect();
+    const rosterReserve = rosterPanel ? rosterPanel.getBoundingClientRect().right - wrapRect.left + GAP : 0;
+    const toolsReserve = toolsPanel ? wrapRect.right - toolsPanel.getBoundingClientRect().left + GAP : 0;
+    const maxWidth = Math.max(320, wrapRect.width - Math.max(0, rosterReserve) - Math.max(0, toolsReserve));
+
+    const finalWidth = Math.min(targetWidth, maxWidth);
     const finalHeight = finalWidth * (86 / 109);
 
     pitch.style.width = finalWidth + "px";
     pitch.style.height = finalHeight + "px";
 
-    if (rosterPanel) rosterPanel.style.maxHeight = Math.max(240, availableHeight) + "px";
+    resizeDrawingCanvas(); // 그라운드 크기가 바뀌었으니 그리기 캔버스도 같이 다시 맞춘다
   }
 
   window.addEventListener("resize", fitPitchToViewport);
+
+  /* ------------------------------------------------------------------ */
+  /* 전술보드 그리기 도구 — 빨간펜/파란펜으로 화살표·동선 등을 자유롭게 그림     */
+  /* ------------------------------------------------------------------ */
+  const DRAWING_STORAGE_KEY = "cheonchiwon-s2-formation-drawings-v1";
+  const DRAW_COLORS = { red: "#ff5a5a", blue: "#4d9fff" };
+
+  let strokes = []; // [{ color, points: [{x,y}] }] — x,y는 그라운드 기준 0~100% 좌표
+  let activeDrawColor = null;
+  let currentStroke = null;
+  let drawingCanvasEl = null;
+
+  function loadStrokes() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(DRAWING_STORAGE_KEY) || "[]");
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveStrokes() {
+    localStorage.setItem(DRAWING_STORAGE_KEY, JSON.stringify(strokes));
+  }
+
+  function paintStroke(ctx, canvas, s) {
+    if (!s.points || s.points.length < 2) return;
+    ctx.strokeStyle = DRAW_COLORS[s.color] || DRAW_COLORS.red;
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    s.points.forEach((p, i) => {
+      const x = (p.x / 100) * canvas.width;
+      const y = (p.y / 100) * canvas.height;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  }
+
+  function redrawStrokes() {
+    if (!drawingCanvasEl) return;
+    const ctx = drawingCanvasEl.getContext("2d");
+    ctx.clearRect(0, 0, drawingCanvasEl.width, drawingCanvasEl.height);
+    strokes.forEach((s) => paintStroke(ctx, drawingCanvasEl, s));
+  }
+
+  function pointFromPointerEvent(canvas, ev) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: Math.min(100, Math.max(0, ((ev.clientX - rect.left) / rect.width) * 100)),
+      y: Math.min(100, Math.max(0, ((ev.clientY - rect.top) / rect.height) * 100)),
+    };
+  }
+
+  function setActiveDrawColor(color) {
+    activeDrawColor = color;
+    if (drawingCanvasEl) drawingCanvasEl.classList.toggle("active", !!color);
+    document.querySelectorAll(".draw-btn[data-color]").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.color === color);
+    });
+  }
+
+  function undoStroke() {
+    if (strokes.length === 0) return;
+    strokes.pop();
+    redrawStrokes();
+    saveStrokes();
+  }
+
+  function clearStrokes() {
+    if (strokes.length === 0) return;
+    if (!confirm("그려진 내용을 모두 지울까요?")) return;
+    strokes = [];
+    redrawStrokes();
+    saveStrokes();
+  }
+
+  function wireDrawingCanvasEvents(canvas) {
+    canvas.addEventListener("pointerdown", (e) => {
+      if (!activeDrawColor || e.button !== 0) return;
+      e.preventDefault();
+      currentStroke = { color: activeDrawColor, points: [pointFromPointerEvent(canvas, e)] };
+      strokes.push(currentStroke);
+      try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+    canvas.addEventListener("pointermove", (e) => {
+      if (!currentStroke) return;
+      currentStroke.points.push(pointFromPointerEvent(canvas, e));
+      redrawStrokes();
+    });
+    function endStroke() {
+      if (!currentStroke) return;
+      currentStroke = null;
+      saveStrokes();
+    }
+    canvas.addEventListener("pointerup", endStroke);
+    canvas.addEventListener("pointercancel", endStroke);
+  }
+
+  // 그라운드 크기가 바뀔 때마다 캔버스 픽셀 크기도 맞추고 저장된 선을 다시 그린다
+  function resizeDrawingCanvas() {
+    const pitchEl = document.getElementById("pitch");
+    if (!pitchEl) return;
+
+    let canvas = document.getElementById("drawing-canvas");
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+      canvas.id = "drawing-canvas";
+      canvas.className = "drawing-canvas";
+      pitchEl.appendChild(canvas);
+      wireDrawingCanvasEvents(canvas);
+    }
+    drawingCanvasEl = canvas;
+
+    const rect = pitchEl.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return; // 탭이 안 보이는 동안엔 건너뜀
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    redrawStrokes();
+  }
+
+  function initDrawingTools() {
+    strokes = loadStrokes();
+    resizeDrawingCanvas();
+
+    document.querySelectorAll(".draw-btn[data-color]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        setActiveDrawColor(activeDrawColor === btn.dataset.color ? null : btn.dataset.color);
+      });
+    });
+
+    const undoBtn = document.getElementById("draw-undo");
+    if (undoBtn) undoBtn.addEventListener("click", undoStroke);
+
+    const clearBtn = document.getElementById("draw-clear");
+    if (clearBtn) clearBtn.addEventListener("click", clearStrokes);
+
+    // ESC로 펜 끄기, Ctrl+Z(⌘Z)로 되돌리기 — 전술보드 탭을 보고 있을 때만 동작
+    document.addEventListener("keydown", (e) => {
+      const boardTab = document.getElementById("tab-board");
+      if (!boardTab || !boardTab.classList.contains("active")) return;
+      if (e.key === "Escape") setActiveDrawColor(null);
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        undoStroke();
+      }
+    });
+  }
 
   const AVATAR_CANVAS_SIZE = 96; // 캔버스 내부 해상도(px). CSS로 실제 크기에 맞게 축소돼 표시됨
 
@@ -1007,6 +1171,23 @@
       saveState();
     });
 
+    // 명단 접기/펼치기 — 접으면 그라운드가 그만큼 넓어진다
+    // 명단(좌측)/도구(우측) 플로팅 패널 접기·펼치기 — 회전 표시는 CSS가 처리
+    const rosterToggleBtn = document.getElementById("roster-toggle");
+    if (rosterToggleBtn) {
+      rosterToggleBtn.addEventListener("click", () => {
+        rosterPanelEl.classList.toggle("collapsed");
+      });
+    }
+
+    const toolsPanelEl = document.getElementById("tools-panel");
+    const toolsToggleBtn = document.getElementById("tools-toggle");
+    if (toolsToggleBtn && toolsPanelEl) {
+      toolsToggleBtn.addEventListener("click", () => {
+        toolsPanelEl.classList.toggle("collapsed");
+      });
+    }
+
     positions = loadState();
     renderAll();
     fitPitchToViewport();
@@ -1043,6 +1224,7 @@
     renderCalendar();
     await renderControlRoom();
     initFormationBoard();
+    initDrawingTools();
   }
 
   boot();

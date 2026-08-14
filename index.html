@@ -48,9 +48,6 @@
       <h2 class="section-title">지원자</h2>
       <span class="section-sub" id="post-feed-count">0명 지원</span>
     </div>
-    <p class="applicant-source-note">
-      모집 게시글 댓글로 지원한 스트리머들의 지원글이에요.
-    </p>
     <div id="post-feed" class="post-feed"></div>
   </section>
 
@@ -60,11 +57,7 @@
       <h2 class="section-title">지통실</h2>
       <span class="section-sub" id="control-count">0명 지원</span>
     </div>
-    <p class="applicant-source-note">
-      프로필 사진과 방송 썸네일은 SOOP(숲)에서 실시간으로 불러와요. 방송 중이 아닌 스트리머는 흐리게 표시돼요.
-    </p>
     <div class="control-toolbar">
-      <span class="control-toolbar-label">정렬 (🔴 방송중인 사람이 항상 먼저 와요)</span>
       <button class="sort-btn active" data-sort="position">⚽ 포지션별</button>
       <button class="sort-btn" data-sort="name">가나다순</button>
     </div>
@@ -100,26 +93,9 @@
   <section id="tab-board" class="tab-panel">
     <div class="section-head">
       <h2 class="section-title">전술보드</h2>
-      <span class="section-sub">지원자 명단에서 끌어와 그라운드나 벤치에 자유롭게 배치하세요</span>
     </div>
 
-    <div class="field-toolbar">
-      <button id="btn-clear" class="quick-link-btn">🗑 전체 초기화</button>
-      <span id="placed-count" class="section-sub">그라운드 0 · 벤치 0 / 전체 0</span>
-    </div>
-
-    <div class="formation-layout">
-
-      <aside id="roster-panel" class="roster-panel panel">
-        <h2 class="panel-title">👥 지원자 명단</h2>
-        <input id="roster-search" class="roster-search" type="text" placeholder="닉네임 검색..." autocomplete="off" />
-        <div class="roster-sort-toolbar">
-          <button class="sort-btn roster-sort-btn" data-sort="name">가나다순</button>
-          <button class="sort-btn roster-sort-btn active" data-sort="position">⚽ 포지션별</button>
-        </div>
-        <div id="roster-list" class="roster-list"></div>
-      </aside>
-
+    <div class="board-stage">
       <div class="pitch-wrap">
         <div id="pitch" class="pitch">
           <svg viewBox="-2 -9 109 86" preserveAspectRatio="xMidYMid meet">
@@ -177,6 +153,42 @@
         <p class="pitch-hint">그라운드 안은 선발, 위아래 사이드라인 밖 어두운 공간은 벤치예요. 다시 드래그해서 옮길 수 있고, ×를 누르거나 명단 쪽으로 끌면 제거돼요.</p>
       </div>
 
+      <!-- 좌측 플로팅: 지원자 명단 -->
+      <aside id="roster-panel" class="roster-floating">
+        <div class="floating-panel-head">
+          <h2 class="panel-title">👥 지원자 명단</h2>
+          <button id="roster-toggle" class="floating-toggle-btn" aria-label="명단 접기/펼치기" title="명단 접기/펼치기">‹</button>
+        </div>
+        <div class="floating-panel-body">
+          <input id="roster-search" class="roster-search" type="text" placeholder="닉네임 검색..." autocomplete="off" />
+          <div class="roster-sort-toolbar">
+            <button class="sort-btn roster-sort-btn" data-sort="name">가나다순</button>
+            <button class="sort-btn roster-sort-btn active" data-sort="position">⚽ 포지션별</button>
+          </div>
+          <div id="roster-list" class="roster-list"></div>
+        </div>
+      </aside>
+
+      <!-- 우측 플로팅: 그리기 · 보드 도구 -->
+      <aside id="tools-panel" class="tools-floating">
+        <div class="floating-panel-head">
+          <h2 class="panel-title">🎨 도구</h2>
+          <button id="tools-toggle" class="floating-toggle-btn" aria-label="도구 접기/펼치기" title="도구 접기/펼치기">›</button>
+        </div>
+        <div class="floating-panel-body">
+          <div class="drawing-toolbar-v">
+            <button id="draw-red" class="draw-btn draw-btn--red" data-color="red">🔴 빨간펜</button>
+            <button id="draw-blue" class="draw-btn draw-btn--blue" data-color="blue">🔵 파란펜</button>
+            <button id="draw-undo" class="draw-btn">↩ 되돌리기</button>
+            <button id="draw-clear" class="draw-btn">🗑 그림 지우기</button>
+            <span class="drawing-hint">ESC로 펜 끄기 · Ctrl+Z로 되돌리기</span>
+          </div>
+          <div class="board-toolbar-v">
+            <button id="btn-clear" class="quick-link-btn">🗑 배치 초기화</button>
+            <span id="placed-count" class="section-sub">그라운드 0 · 벤치 0 / 전체 0</span>
+          </div>
+        </div>
+      </aside>
     </div>
   </section>
 
