@@ -115,6 +115,34 @@
     return sortByName(a, b);
   }
 
+  const POSITION_GROUP_ORDER = ["gk", "df", "mf", "fw"];
+
+  // 포지션 표기(예: "FB / CDM")를 색상 그룹별로 묶는다. 같은 그룹끼리는 한 묶음으로
+  // 합쳐지고(예: "CB / SB" → df 하나), 색이 서로 다른 그룹이 섞여 있으면 그룹별로
+  // 따로따로 나뉜다(예: "FB / CDM" → df 하나 + mf 하나) — 전술보드 명단에서 이
+  // 각 묶음마다 배지를 하나씩 만들어서, 여러 포지션을 겸하는 선수가 해당하는
+  // 모든 색깔 자리에 다 보이게 하기 위함
+  function positionGroupBuckets(position) {
+    const tokens = String(position || "")
+      .split(/[,/]/)
+      .map((s) => s.trim().toUpperCase())
+      .filter(Boolean);
+    if (tokens.length === 0) return [{ group: null, label: "" }];
+
+    const order = [];
+    const map = new Map();
+    tokens.forEach((t) => {
+      const group = POSITION_GROUP_BY_TOKEN[t] || null;
+      const key = group || "__none__";
+      if (!map.has(key)) {
+        map.set(key, []);
+        order.push(key);
+      }
+      map.get(key).push(t);
+    });
+    return order.map((key) => ({ group: key === "__none__" ? null : key, label: map.get(key).join(" / ") }));
+  }
+
   /* ------------------------------------------------------------------ */
   /* 스프레드시트(Firebase) 에서 지원자 명단 불러오기                        */
   /* "지원자 동기화 apps script.txt" 가 같은 경로에 씀 —                     */
@@ -1071,9 +1099,11 @@
         .then((img) => {
           if (!img) return;
 
-          const rosterChip = rosterListEl.querySelector(`.roster-chip[data-name="${cssEscape(name)}"]`);
-          const rosterAvatar = rosterChip && rosterChip.querySelector(".roster-avatar");
-          if (rosterAvatar) paintFrozenAvatar(rosterAvatar, img, false);
+          // 여러 포지션 색상을 겸하는 선수는 명단에 칩이 여러 개 있을 수 있어서 전부 칠한다
+          rosterListEl.querySelectorAll(`.roster-chip[data-name="${cssEscape(name)}"]`).forEach((rosterChip) => {
+            const rosterAvatar = rosterChip.querySelector(".roster-avatar");
+            if (rosterAvatar) paintFrozenAvatar(rosterAvatar, img, false);
+          });
 
           const fieldChip = pitchTokensEl.querySelector(`.player-chip[data-name="${cssEscape(name)}"]`);
           if (fieldChip) paintFrozenAvatar(fieldChip, img, true);
@@ -1084,67 +1114,102 @@
     /* -------------------------------------------------------------- */
     /* 렌더링                                                              */
     /* -------------------------------------------------------------- */
+    // 여러 포지션(색이 다른 그룹)을 겸하는 선수는 명단에 그 색깔 수만큼 칩이 따로 생긴다.
+    // 예: "FB / CDM" → 파란 FB 칩 + 초록 CDM 칩. 실제로는 같은 선수(positions[name] 기준)라
+    // 하나를 그라운드로 옮기면 두 칩이 한꺼번에 어두워진다(.placed)
+    function buildRosterChip(applicant, bucket) {
+      const name = applicant.name;
+      const chip = document.createElement("div");
+      chip.className = "roster-chip" + (positions[name] ? " placed" : "") + (applicant.custom ? " roster-chip--custom" : "");
+      chip.dataset.name = name;
+      chip.title = name;
+      const posColorVar = `var(--pos-${bucket.group || "none"})`;
+      chip.style.setProperty("--pos-color", posColorVar);
+
+      const avatar = document.createElement("span");
+      avatar.className = "roster-avatar";
+      avatar.textContent = name.charAt(0);
+
+      // 이름 위, 포지션 배지 아래로 두 줄로 쌓이게 감싼다
+      const textWrap = document.createElement("span");
+      textWrap.className = "roster-chip-text";
+
+      const label = document.createElement("span");
+      label.className = "roster-name";
+      label.textContent = name;
+      textWrap.appendChild(label);
+
+      if (bucket.label) {
+        const posBadge = document.createElement("span");
+        posBadge.className = "roster-position-badge";
+        posBadge.style.setProperty("--pos-color", posColorVar);
+        posBadge.textContent = bucket.label;
+        textWrap.appendChild(posBadge);
+      }
+
+      chip.appendChild(avatar);
+      chip.appendChild(textWrap);
+
+      if (applicant.custom) {
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "roster-chip-remove";
+        removeBtn.setAttribute("aria-label", `${name} 삭제`);
+        removeBtn.title = "명단에서 삭제";
+        removeBtn.textContent = "×";
+        removeBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+        removeBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          removeCustomPlayer(name);
+          renderAll();
+        });
+        chip.appendChild(removeBtn);
+      }
+
+      return chip;
+    }
+
     function renderRoster() {
       rosterListEl.innerHTML = "";
-      const comparator = rosterSortMode === "position" ? sortByPosition : sortByName;
       const all = Array.from(applicantByName.values());
       const customOnes = all.filter((a) => a.custom);
       const normalOnes = all.filter((a) => !a.custom);
+
+      // 선수 하나당 포지션 색 그룹 수만큼 {applicant, bucket} 항목을 만든다
+      function toEntries(list) {
+        const entries = [];
+        list.forEach((applicant) => {
+          positionGroupBuckets(applicant.position).forEach((bucket) => entries.push({ applicant, bucket }));
+        });
+        return entries;
+      }
+
+      const customEntries = toEntries(customOnes).sort((a, b) => sortByName(a.applicant, b.applicant));
+      const normalEntries = toEntries(normalOnes);
+
+      if (rosterSortMode === "position") {
+        normalEntries.sort((a, b) => {
+          const ix = a.bucket.group ? POSITION_GROUP_ORDER.indexOf(a.bucket.group) : POSITION_GROUP_ORDER.length;
+          const iy = b.bucket.group ? POSITION_GROUP_ORDER.indexOf(b.bucket.group) : POSITION_GROUP_ORDER.length;
+          if (ix !== iy) return ix - iy;
+          return sortByName(a.applicant, b.applicant);
+        });
+      } else {
+        normalEntries.sort((a, b) => sortByName(a.applicant, b.applicant));
+      }
+
       // 직접 추가한 선수는 정렬 기준과 무관하게 항상 명단 맨 위에 모아둔다
-      const sorted = customOnes.sort(sortByName).concat(normalOnes.sort(comparator)).map((a) => a.name);
-      sorted.forEach((name) => {
-        const applicant = applicantByName.get(name);
-        const chip = document.createElement("div");
-        chip.className = "roster-chip" + (positions[name] ? " placed" : "") + (applicant && applicant.custom ? " roster-chip--custom" : "");
-        chip.dataset.name = name;
-        chip.title = name;
-        const posColorVar = positionColorVarValue(applicant && applicant.position);
-        if (posColorVar) chip.style.setProperty("--pos-color", posColorVar);
+      const entries = customEntries.concat(normalEntries);
 
-        const avatar = document.createElement("span");
-        avatar.className = "roster-avatar";
-        avatar.textContent = name.charAt(0);
-
-        // 이름 위, 포지션 배지 아래로 두 줄로 쌓이게 감싼다
-        const textWrap = document.createElement("span");
-        textWrap.className = "roster-chip-text";
-
-        const label = document.createElement("span");
-        label.className = "roster-name";
-        label.textContent = name;
-        textWrap.appendChild(label);
-
-        if (applicant && applicant.position) {
-          const posBadge = document.createElement("span");
-          posBadge.className = "roster-position-badge";
-          if (posColorVar) posBadge.style.setProperty("--pos-color", posColorVar);
-          posBadge.textContent = applicant.position;
-          textWrap.appendChild(posBadge);
-        }
-
-        chip.appendChild(avatar);
-        chip.appendChild(textWrap);
-
-        if (applicant && applicant.custom) {
-          const removeBtn = document.createElement("button");
-          removeBtn.type = "button";
-          removeBtn.className = "roster-chip-remove";
-          removeBtn.setAttribute("aria-label", `${name} 삭제`);
-          removeBtn.title = "명단에서 삭제";
-          removeBtn.textContent = "×";
-          removeBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
-          removeBtn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            removeCustomPlayer(name);
-            renderAll();
-          });
-          chip.appendChild(removeBtn);
-        }
-
+      const seenNames = new Set();
+      entries.forEach(({ applicant, bucket }) => {
+        const chip = buildRosterChip(applicant, bucket);
         rosterListEl.appendChild(chip);
-
-        chip.addEventListener("pointerdown", (e) => startChipDrag(e, chip, name, "roster"));
-        hookPhoto(name);
+        chip.addEventListener("pointerdown", (e) => startChipDrag(e, chip, applicant.name, "roster"));
+        if (!seenNames.has(applicant.name)) {
+          seenNames.add(applicant.name);
+          hookPhoto(applicant.name); // 사진은 이름당 한 번만 불러오면 됨 (칩이 여러 개면 안에서 전부 칠해줌)
+        }
       });
       filterRoster();
     }
