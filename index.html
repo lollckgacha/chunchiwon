@@ -160,6 +160,10 @@
           <button id="roster-toggle" class="floating-toggle-btn" aria-label="명단 접기/펼치기" title="명단 접기/펼치기">‹</button>
         </div>
         <div class="floating-panel-body">
+          <div class="roster-add-form">
+            <input id="roster-add-input" class="roster-add-input" type="text" placeholder="이름 직접 입력..." autocomplete="off" maxlength="20" />
+            <button id="roster-add-btn" class="roster-add-btn" type="button" title="명단에 추가">＋ 직접추가</button>
+          </div>
           <input id="roster-search" class="roster-search" type="text" placeholder="닉네임 검색..." autocomplete="off" />
           <div class="roster-sort-toolbar">
             <button class="sort-btn roster-sort-btn" data-sort="name">가나다순</button>
@@ -193,6 +197,8 @@
   </section>
 
 </main>
+
+<button id="scroll-top-btn" class="scroll-top-btn" aria-label="맨 위로 이동" title="맨 위로">⬆</button>
 
 <script src="js/data.js"></script>
 <script src="js/main.js"></script>

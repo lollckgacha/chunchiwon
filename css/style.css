@@ -66,6 +66,42 @@ body.board-active .topbar {
   position: static;
 }
 
+/* ---------------------------------------------------------------- */
+/* 맨 위로 이동 버튼 — 지원자/지통실처럼 목록이 긴 탭에서 어느 정도            */
+/* 스크롤을 내리면 나타나서, 상단 메뉴로 바로 돌아갈 수 있게 해준다             */
+/* ---------------------------------------------------------------- */
+.scroll-top-btn {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--fc-green);
+  color: #04140c;
+  border: none;
+  font-size: 1.25rem;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5), 0 0 18px rgba(83,247,186,0.35);
+  opacity: 0;
+  transform: translateY(12px);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease, background 0.15s ease;
+  z-index: 60;
+}
+
+.scroll-top-btn.visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.scroll-top-btn:hover {
+  background: var(--fc-green-dim);
+}
+
 .topbar-inner {
   max-width: 1600px;
   margin: 0 auto;

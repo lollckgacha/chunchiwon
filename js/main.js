@@ -331,6 +331,14 @@
   /* ------------------------------------------------------------------ */
   /* 상단 탭 전환 — URL 해시로 기록해서 브라우저 뒤로/앞으로가기로도 이동 가능      */
   /* ------------------------------------------------------------------ */
+  // 그리기 도구 상태는 아래에서 선언되지만, 주소창에 #tab-board 해시가 있는 채로 처음
+  // 들어오면 이 시점보다도 먼저(초기 탭 부팅 시) fitPitchToViewport→resizeDrawingCanvas가
+  // 호출될 수 있어서 미리 선언해둔다 (안 그러면 TDZ 참조 오류로 페이지가 멈춤)
+  let strokes = []; // [{ color, points: [{x,y}] }] — x,y는 그라운드 기준 0~100% 좌표
+  let activeDrawColor = null;
+  let currentStroke = null;
+  let drawingCanvasEl = null;
+
   const TAB_IDS = Array.from(document.querySelectorAll(".nav-tab[data-tab]")).map((b) => b.dataset.tab);
   const DEFAULT_TAB_ID = TAB_IDS[0];
 
@@ -378,6 +386,21 @@
     activateTab(initialTabId, { push: false });
   } else {
     history.replaceState({ tabId: DEFAULT_TAB_ID }, "", "#" + DEFAULT_TAB_ID);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 맨 위로 이동 버튼 — 지원자/지통실처럼 목록이 긴 탭에서 스크롤을 좀 내리면 */
+  /* 오른쪽 아래에 나타나서, 누르면 상단 메뉴가 있는 맨 위로 데려다준다        */
+  /* ------------------------------------------------------------------ */
+  const scrollTopBtn = document.getElementById("scroll-top-btn");
+  if (scrollTopBtn) {
+    const SCROLL_SHOW_THRESHOLD = 400;
+    window.addEventListener("scroll", () => {
+      scrollTopBtn.classList.toggle("visible", window.scrollY > SCROLL_SHOW_THRESHOLD);
+    });
+    scrollTopBtn.addEventListener("click", () => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
   }
 
   /* ------------------------------------------------------------------ */
@@ -536,11 +559,6 @@
   /* ------------------------------------------------------------------ */
   const DRAWING_STORAGE_KEY = "cheonchiwon-s2-formation-drawings-v1";
   const DRAW_COLORS = { red: "#ff5a5a", blue: "#4d9fff" };
-
-  let strokes = []; // [{ color, points: [{x,y}] }] — x,y는 그라운드 기준 0~100% 좌표
-  let activeDrawColor = null;
-  let currentStroke = null;
-  let drawingCanvasEl = null;
 
   function loadStrokes() {
     try {
@@ -727,16 +745,18 @@
   }
 
   function initFormationBoard() {
-    const PLAYERS = DATA.APPLICANTS.map((a) => a.name);
     const applicantByName = new Map(DATA.APPLICANTS.map((a) => [a.name, a]));
 
     const STORAGE_KEY = "cheonchiwon-s2-formation-v1";
+    const CUSTOM_STORAGE_KEY = "cheonchiwon-s2-formation-custom-v1";
     const GRASS_TOP_PCT = 10.5;
     const GRASS_BOTTOM_PCT = 89.5;
 
     const rosterListEl = document.getElementById("roster-list");
     const rosterSearchEl = document.getElementById("roster-search");
     const rosterPanelEl = document.getElementById("roster-panel");
+    const rosterAddInputEl = document.getElementById("roster-add-input");
+    const rosterAddBtnEl = document.getElementById("roster-add-btn");
     const pitchEl = document.getElementById("pitch");
     const pitchTokensEl = document.getElementById("pitch-tokens");
     const placedCountEl = document.getElementById("placed-count");
@@ -747,13 +767,60 @@
     let positions = {}; // name -> {x, y} (percent)
     let rosterSortMode = "position";
 
+    /* -------------------------------------------------------------- */
+    /* 직접 추가한 선수 — 지원자 명단에 없는 이름을 사진(천치원 로고)만       */
+    /* 붙여서 명단에 끼워 넣는다. 실제 지원자 목록(DATA.APPLICANTS)은         */
+    /* 건드리지 않고, 로컬에만 저장되는 별도 명단으로 관리한다                 */
+    /* -------------------------------------------------------------- */
+    function loadCustomPlayers() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(CUSTOM_STORAGE_KEY) || "[]");
+        return Array.isArray(parsed) ? parsed.filter((n) => typeof n === "string" && n.trim()) : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function saveCustomPlayers() {
+      localStorage.setItem(CUSTOM_STORAGE_KEY, JSON.stringify(customPlayers));
+    }
+
+    let customPlayers = loadCustomPlayers();
+    customPlayers.forEach((name) => {
+      if (!applicantByName.has(name)) {
+        applicantByName.set(name, { name, station: null, position: "", photo: "logo.png", custom: true });
+      }
+    });
+
+    function allPlayerNames() {
+      return Array.from(applicantByName.keys());
+    }
+
+    function addCustomPlayer(rawName) {
+      const name = rawName.trim();
+      if (!name) return "empty";
+      if (applicantByName.has(name)) return "duplicate";
+      applicantByName.set(name, { name, station: null, position: "", photo: "logo.png", custom: true });
+      customPlayers.push(name);
+      saveCustomPlayers();
+      return "ok";
+    }
+
+    function removeCustomPlayer(name) {
+      customPlayers = customPlayers.filter((n) => n !== name);
+      applicantByName.delete(name);
+      delete positions[name];
+      saveCustomPlayers();
+      saveState();
+    }
+
     function loadState() {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) return {};
         const parsed = JSON.parse(raw);
         const valid = {};
-        const known = new Set(PLAYERS);
+        const known = new Set(allPlayerNames());
         Object.keys(parsed).forEach((name) => {
           const p = parsed[name];
           if (known.has(name) && p && typeof p.x === "number" && typeof p.y === "number") {
@@ -790,7 +857,7 @@
       const names = Object.keys(positions);
       const onGrass = names.filter((n) => isOnGrass(positions[n].y)).length;
       const onBench = names.length - onGrass;
-      placedCountEl.textContent = `그라운드 ${onGrass} · 벤치 ${onBench} / 전체 ${PLAYERS.length}`;
+      placedCountEl.textContent = `그라운드 ${onGrass} · 벤치 ${onBench} / 전체 ${allPlayerNames().length}`;
     }
 
     /* -------------------------------------------------------------- */
@@ -827,11 +894,15 @@
     function renderRoster() {
       rosterListEl.innerHTML = "";
       const comparator = rosterSortMode === "position" ? sortByPosition : sortByName;
-      const sorted = DATA.APPLICANTS.slice().sort(comparator).map((a) => a.name);
+      const all = Array.from(applicantByName.values());
+      const customOnes = all.filter((a) => a.custom);
+      const normalOnes = all.filter((a) => !a.custom);
+      // 직접 추가한 선수는 정렬 기준과 무관하게 항상 명단 맨 아래에 모아둔다
+      const sorted = normalOnes.sort(comparator).concat(customOnes.sort(sortByName)).map((a) => a.name);
       sorted.forEach((name) => {
         const applicant = applicantByName.get(name);
         const chip = document.createElement("div");
-        chip.className = "roster-chip" + (positions[name] ? " placed" : "");
+        chip.className = "roster-chip" + (positions[name] ? " placed" : "") + (applicant && applicant.custom ? " roster-chip--custom" : "");
         chip.dataset.name = name;
         chip.title = name;
         const posColorVar = positionColorVarValue(applicant && applicant.position);
@@ -860,6 +931,22 @@
 
         chip.appendChild(avatar);
         chip.appendChild(textWrap);
+
+        if (applicant && applicant.custom) {
+          const removeBtn = document.createElement("button");
+          removeBtn.type = "button";
+          removeBtn.className = "roster-chip-remove";
+          removeBtn.setAttribute("aria-label", `${name} 삭제`);
+          removeBtn.title = "명단에서 삭제";
+          removeBtn.textContent = "×";
+          removeBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+          removeBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            removeCustomPlayer(name);
+            renderAll();
+          });
+          chip.appendChild(removeBtn);
+        }
 
         rosterListEl.appendChild(chip);
 
@@ -1157,6 +1244,28 @@
     /* 초기화                                                              */
     /* -------------------------------------------------------------- */
     rosterSearchEl.addEventListener("input", filterRoster);
+
+    // 직접추가 — 지원자 명단에 없는 이름을 직접 입력해서 추가 (사진은 천치원 로고)
+    if (rosterAddBtnEl && rosterAddInputEl) {
+      const submitAddPlayer = () => {
+        const result = addCustomPlayer(rosterAddInputEl.value);
+        if (result === "duplicate") {
+          alert("이미 명단에 있는 이름이에요.");
+          return;
+        }
+        if (result === "ok") {
+          rosterAddInputEl.value = "";
+          renderAll();
+        }
+      };
+      rosterAddBtnEl.addEventListener("click", submitAddPlayer);
+      rosterAddInputEl.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          submitAddPlayer();
+        }
+      });
+    }
 
     document.querySelectorAll(".roster-sort-btn[data-sort]").forEach((btn) => {
       btn.addEventListener("click", () => {
