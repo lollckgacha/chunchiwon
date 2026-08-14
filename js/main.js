@@ -896,7 +896,14 @@
       try {
         const parsed = JSON.parse(localStorage.getItem(DUMMY_STORAGE_KEY) || "[]");
         if (!Array.isArray(parsed)) return [];
-        return parsed.filter((d) => d && typeof d.id === "string" && typeof d.x === "number" && typeof d.y === "number");
+        const valid = parsed.filter((d) => d && typeof d.id === "string" && typeof d.x === "number" && typeof d.y === "number");
+        // 이 기능이 생기기 전에 저장된 더미(번호 없음)는 순서대로 번호를 새로 매겨준다
+        let nextNum = 1;
+        valid.forEach((d) => {
+          if (typeof d.number !== "number") d.number = nextNum;
+          nextNum = Math.max(nextNum, d.number) + 1;
+        });
+        return valid;
       } catch (e) {
         return [];
       }
@@ -908,8 +915,18 @@
 
     let dummyTokens = loadDummyTokens();
 
+    // 지금까지 쓰인 가장 큰 번호 다음 번호를 매긴다 (지워도 번호가 재사용되지 않음)
+    function nextDummyNumber() {
+      return dummyTokens.reduce((max, d) => Math.max(max, d.number || 0), 0) + 1;
+    }
+
     function addDummyToken() {
-      dummyTokens.push({ id: "dummy-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7), x: 50, y: 50 });
+      dummyTokens.push({
+        id: "dummy-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7),
+        x: 50,
+        y: 50,
+        number: nextDummyNumber(),
+      });
       saveDummyTokens();
       renderDummyTokens();
     }
@@ -929,9 +946,15 @@
       const chip = document.createElement("div");
       chip.className = "player-chip player-chip--field player-chip--dummy";
       chip.dataset.dummyId = d.id;
-      chip.title = "더미선수";
+      chip.title = "더미선수 " + d.number;
       chip.style.left = d.x + "%";
       chip.style.top = d.y + "%";
+
+      const numberEl = document.createElement("span");
+      numberEl.className = "dummy-number";
+      numberEl.style.fontSize = fontSizeForDummyNumber(d.number);
+      numberEl.textContent = String(d.number);
+      chip.appendChild(numberEl);
 
       const removeBtn = document.createElement("span");
       removeBtn.className = "token-remove";
@@ -955,6 +978,11 @@
 
       const ghost = document.createElement("div");
       ghost.className = "player-chip player-chip--ghost player-chip--dummy";
+      const ghostNumberEl = document.createElement("span");
+      ghostNumberEl.className = "dummy-number";
+      ghostNumberEl.style.fontSize = fontSizeForDummyNumber(d.number);
+      ghostNumberEl.textContent = String(d.number);
+      ghost.appendChild(ghostNumberEl);
       document.body.appendChild(ghost);
       moveGhost(ghost, e.clientX, e.clientY);
 
@@ -1072,6 +1100,13 @@
       if (len <= 5) return "9.5px";
       if (len <= 8) return "8.5px";
       return "7.5px";
+    }
+
+    function fontSizeForDummyNumber(num) {
+      const len = String(num).length;
+      if (len <= 1) return "22px";
+      if (len === 2) return "17px";
+      return "13px";
     }
 
     function updateCounts() {
@@ -1566,7 +1601,7 @@
         try { logoImg = await loadImageEl("logo.png"); } catch (err) { logoImg = null; }
       }
 
-      // 더미선수 코인 (사이트 메인 컬러 단색)
+      // 더미선수 코인 (사이트 메인 컬러 단색 + 중앙에 번호)
       dummyTokens.forEach((d) => {
         const cx = (d.x / 100) * boxWidth;
         const cy = (d.y / 100) * boxHeight;
@@ -1577,6 +1612,12 @@
         ctx.lineWidth = 2;
         ctx.strokeStyle = "#35c996";
         ctx.stroke();
+
+        ctx.fillStyle = "#04140c";
+        ctx.font = `900 ${Math.max(11, r * 0.62)}px "Segoe UI", "Malgun Gothic", sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(d.number != null ? d.number : ""), cx, cy);
       });
 
       // 배치된 지원자 — 포지션 색 테두리 원 + 이름 (직접추가 선수는 로고 사진)

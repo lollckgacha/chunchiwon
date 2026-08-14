@@ -481,6 +481,15 @@
   border-color: var(--fc-green-dim);
 }
 
+/* 더미선수 코인 중앙에 크게 박히는 번호 — 추가한 순서대로 1, 2, 3... */
+.dummy-number {
+  font-weight: 900;
+  color: #04140c;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+}
+
 /* 드래그로 직접 옮기는 중에는 트랜지션 없이 손가락(커서)을 바로 따라가야 함 */
 .player-chip--field.dragging {
   transition: none;
