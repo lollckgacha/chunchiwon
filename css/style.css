@@ -61,7 +61,7 @@ a { color: inherit; }
 }
 
 .topbar-inner {
-  max-width: 1280px;
+  max-width: 1600px;
   margin: 0 auto;
   padding: 12px 20px;
   display: flex;
@@ -138,7 +138,7 @@ a { color: inherit; }
 /* Layout                                                            */
 /* ---------------------------------------------------------------- */
 main {
-  max-width: 1280px;
+  max-width: 1600px;
   margin: 0 auto;
   padding: 32px 20px 80px;
 }
@@ -213,17 +213,6 @@ main {
 .quick-link-btn:hover {
   background: rgba(83,247,186,0.16);
   transform: translateX(3px);
-}
-
-/* ---------------------------------------------------------------- */
-/* Footer                                                             */
-/* ---------------------------------------------------------------- */
-.site-footer {
-  text-align: center;
-  padding: 24px;
-  color: var(--fc-text-dim);
-  font-size: 0.78rem;
-  border-top: 1px solid var(--fc-panel-border);
 }
 
 /* ---------------------------------------------------------------- */
@@ -598,7 +587,7 @@ main {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 8px;
-  margin-bottom: 8px;
+  margin: 0 auto 8px;
 }
 
 .calendar-weekday {
@@ -616,6 +605,7 @@ main {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 8px;
+  margin: 0 auto;
 }
 
 .calendar-cell {

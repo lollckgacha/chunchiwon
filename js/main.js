@@ -338,10 +338,11 @@
       const hash = "#" + tabId;
       if (location.hash !== hash) history.pushState({ tabId }, "", hash);
     }
+
     // 방금 보이게 된 탭이 전술보드/일정이면, 그 탭 크기가 화면에 맞게 다시 계산되어야 한다
     // (안 보이는 동안엔 실측이 불가능해서 렌더 시점엔 계산을 건너뛰었음)
-    if (tabId === "tab-board") requestAnimationFrame(fitPitchToViewport);
-    if (tabId === "tab-schedule") requestAnimationFrame(fitCalendarToViewport);
+    if (tabId === "tab-board") fitPitchToViewport();
+    if (tabId === "tab-schedule") fitCalendarToViewport();
   }
 
   document.querySelectorAll(".nav-tab[data-tab]").forEach((btn) => {
@@ -421,31 +422,39 @@
     fitCalendarToViewport();
   }
 
-  // 1920x1080 같은 화면에서 스크롤 없이 달력이 한 화면에 다 들어오도록,
-  // 넘치는 만큼 정확히 셀 크기(정사각형)를 줄인다. (화면이 넉넉하면 그대로 둠)
+  // 화면에 남는 세로 공간을 실측해서 달력 칸(정사각형) 크기를 그만큼 꽉 채운다.
+  // (공간이 부족하면 줄이고, 넉넉하면 — 예: 푸터를 뺀 만큼 — 키운다) 요일 줄도
+  // 달력과 정확히 같은 너비로 맞춰서 가운데 정렬이 서로 어긋나지 않게 한다.
   function fitCalendarToViewport() {
     const tab = document.getElementById("tab-schedule");
     const grid = document.getElementById("calendar-grid");
+    const weekdays = document.querySelector(".calendar-weekdays");
+    const mainEl = document.querySelector("main");
     if (!tab || !grid || !tab.classList.contains("active")) return;
 
-    grid.style.width = ""; // CSS 기본 크기로 되돌린 뒤 다시 측정
+    grid.style.width = "";
+    if (weekdays) weekdays.style.width = "";
+    // 스타일을 되돌린 직후 바로 측정하면(getBoundingClientRect 호출 시 브라우저가
+    // 강제로 동기 레이아웃을 계산해줌) 프레임을 기다릴 필요 없이 바로 정확한 값을 잴 수 있다.
+    // (requestAnimationFrame은 이 페이지가 실제로 화면에 그려지고 있을 때만 불려서,
+    //  창이 최소화/백그라운드 상태면 영영 안 불릴 수 있어 여기선 쓰지 않는다)
+    const totalCells = grid.children.length;
+    if (totalCells === 0) return;
+    const rows = Math.max(1, Math.ceil(totalCells / 7));
+    const gap = parseFloat(getComputedStyle(grid).rowGap) || 0;
 
-    requestAnimationFrame(() => {
-      const overflow = document.documentElement.scrollHeight - window.innerHeight;
-      if (overflow <= 0) return;
+    const gridTop = grid.getBoundingClientRect().top; // 탑바+제목+툴바+요일줄까지 포함된 윗공간
+    const mainPaddingBottom = mainEl ? parseFloat(getComputedStyle(mainEl).paddingBottom) : 0;
 
-      const totalCells = grid.children.length;
-      const rows = Math.max(1, Math.ceil(totalCells / 7));
-      const gap = parseFloat(getComputedStyle(grid).rowGap) || 0;
+    const availableHeight = window.innerHeight - gridTop - mainPaddingBottom - 4;
+    const cellSize = Math.max(28, (availableHeight - gap * (rows - 1)) / rows);
+    const targetWidth = cellSize * 7 + gap * 6;
 
-      const rect = grid.getBoundingClientRect();
-      const currentCellSize = (rect.width - gap * 6) / 7;
-      const targetCellSize = currentCellSize - (overflow + 8) / rows;
-      const targetWidth = targetCellSize * 7 + gap * 6;
+    const wrapWidth = grid.parentElement.getBoundingClientRect().width;
+    const finalWidth = Math.max(200, Math.min(targetWidth, wrapWidth));
 
-      const wrapWidth = grid.parentElement.getBoundingClientRect().width;
-      grid.style.width = Math.max(200, Math.min(targetWidth, wrapWidth)) + "px";
-    });
+    grid.style.width = finalWidth + "px";
+    if (weekdays) weekdays.style.width = finalWidth + "px";
   }
 
   window.addEventListener("resize", fitCalendarToViewport);
@@ -469,42 +478,41 @@
   /* 전술보드 탭 — 드래그 앤 드롭 포메이션 보드 (지원자 명단 기반)             */
   /* ------------------------------------------------------------------ */
 
-  // 1920x1080 같은 화면에서 스크롤 없이 그라운드까지 한 화면에 다 들어오도록,
-  // 실제로 넘치는 만큼만 정확히 줄인다 (화면이 넉넉하면 CSS 기본 크기 그대로 둠)
+  // 화면에 남는 세로 공간을 실측해서 그라운드(+명단 패널)를 그만큼 꽉 채운다.
+  // (공간이 부족하면 줄이고, 넉넉하면 — 예: 푸터를 뺀 만큼 — 키운다) 가로 폭은
+  // 축구장 비율(109:86)을 유지한 채로, 명단 옆 남는 폭 안에서 최대한 넓게 잡는다.
   function fitPitchToViewport() {
     const tab = document.getElementById("tab-board");
     const wrap = document.querySelector(".pitch-wrap");
     const pitch = document.getElementById("pitch");
+    const hint = document.querySelector(".pitch-hint");
     const rosterPanel = document.getElementById("roster-panel");
+    const mainEl = document.querySelector("main");
     if (!tab || !wrap || !pitch || !tab.classList.contains("active")) return;
 
     pitch.style.width = "";
     pitch.style.height = "";
-    if (rosterPanel) rosterPanel.style.maxHeight = ""; // CSS 기본 크기로 되돌린 뒤 다시 측정
+    if (rosterPanel) rosterPanel.style.maxHeight = "";
+    // 스타일을 되돌린 직후 바로 측정하면(getBoundingClientRect 호출 시 브라우저가
+    // 강제로 동기 레이아웃을 계산해줌) 프레임을 기다릴 필요 없이 바로 정확한 값을 잴 수 있다.
+    // (requestAnimationFrame은 이 페이지가 실제로 화면에 그려지고 있을 때만 불려서,
+    //  창이 최소화/백그라운드 상태면 영영 안 불릴 수 있어 여기선 쓰지 않는다)
+    const wrapTop = wrap.getBoundingClientRect().top; // 탑바+제목+툴바 등 위쪽 전체
+    const hintHeight = hint ? hint.getBoundingClientRect().height + 10 : 0; // 안내문 + 여백
+    const mainPaddingBottom = mainEl ? parseFloat(getComputedStyle(mainEl).paddingBottom) : 0;
 
-    requestAnimationFrame(() => {
-      const overflow = document.documentElement.scrollHeight - window.innerHeight;
-      if (overflow <= 0) return;
-      const shrinkBy = overflow + 8;
+    const availableHeight = window.innerHeight - wrapTop - hintHeight - mainPaddingBottom - 4;
+    const targetHeight = Math.max(320, availableHeight);
+    const targetWidth = targetHeight * (109 / 86);
 
-      // 명단 패널(roster-panel)이 그라운드보다 더 길면 걔가 전체 높이를 결정해버리니,
-      // 그라운드와 똑같이 넘치는 만큼 같이 줄인다 (명단 자체는 내부 스크롤이라 내용은 안 잘림)
-      if (rosterPanel) {
-        const curHeight = rosterPanel.getBoundingClientRect().height;
-        rosterPanel.style.maxHeight = Math.max(240, curHeight - shrinkBy) + "px";
-      }
+    const wrapWidth = wrap.getBoundingClientRect().width;
+    const finalWidth = Math.min(targetWidth, wrapWidth);
+    const finalHeight = finalWidth * (86 / 109);
 
-      const rect = pitch.getBoundingClientRect();
-      const targetHeight = Math.max(320, rect.height - shrinkBy);
-      const targetWidth = targetHeight * (109 / 86);
+    pitch.style.width = finalWidth + "px";
+    pitch.style.height = finalHeight + "px";
 
-      const wrapWidth = wrap.getBoundingClientRect().width;
-      const finalWidth = Math.min(targetWidth, wrapWidth);
-      const finalHeight = finalWidth * (86 / 109);
-
-      pitch.style.width = finalWidth + "px";
-      pitch.style.height = finalHeight + "px";
-    });
+    if (rosterPanel) rosterPanel.style.maxHeight = Math.max(240, availableHeight) + "px";
   }
 
   window.addEventListener("resize", fitPitchToViewport);
