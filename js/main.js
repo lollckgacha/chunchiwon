@@ -490,6 +490,17 @@
 
   let calendarViewDate = new Date(2026, 7, 1); // 2026년 8월 (월은 0부터 시작하므로 7)
 
+  // 사용자 브라우저 시간대와 무관하게, 항상 대한민국 표준시(UTC+9) 기준 오늘 날짜를
+  // "YYYY-MM-DD"로 돌려준다 (en-CA 로케일이 그 형식 그대로 포맷해줌)
+  function todayISOInKST() {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Seoul",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+  }
+
   function renderCalendar() {
     const grid = document.getElementById("calendar-grid");
     const label = document.getElementById("calendar-month-label");
@@ -504,6 +515,7 @@
       (eventsByDate[ev.date] = eventsByDate[ev.date] || []).push(ev);
     });
 
+    const todayISO = todayISOInKST();
     const startWeekday = new Date(year, month, 1).getDay(); // 0=일
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
@@ -516,6 +528,7 @@
       const events = eventsByDate[iso] || [];
       const weekday = new Date(year, month, d).getDay();
       const weekdayClass = weekday === 0 ? " calendar-cell--sun" : weekday === 6 ? " calendar-cell--sat" : "";
+      const todayClass = iso === todayISO ? " calendar-cell--today" : "";
       const eventsHTML = events
         .map(
           (ev) => `
@@ -526,7 +539,7 @@
         )
         .join("");
       cells.push(`
-        <div class="calendar-cell${weekdayClass}${events.length ? " has-event" : ""}">
+        <div class="calendar-cell${weekdayClass}${todayClass}${events.length ? " has-event" : ""}">
           <span class="calendar-day-num">${d}</span>
           ${eventsHTML}
         </div>`);

@@ -691,6 +691,16 @@ main {
   box-shadow: 0 0 0 1px rgba(83,247,186,0.3), 0 0 16px rgba(83,247,186,0.12);
 }
 
+/* 오늘 날짜(대한민국 시간 기준) — 배경을 밝혀서 한눈에 띄게 한다 */
+.calendar-cell--today {
+  background: rgba(83,247,186,0.22);
+  border-color: var(--fc-green);
+}
+
+.calendar-cell--today .calendar-day-num {
+  color: var(--fc-green);
+}
+
 .calendar-day-num {
   font-weight: 800;
   font-size: 0.85rem;
