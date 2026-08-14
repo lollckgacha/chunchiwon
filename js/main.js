@@ -841,20 +841,25 @@
         avatar.className = "roster-avatar";
         avatar.textContent = name.charAt(0);
 
+        // 이름 위, 포지션 배지 아래로 두 줄로 쌓이게 감싼다
+        const textWrap = document.createElement("span");
+        textWrap.className = "roster-chip-text";
+
         const label = document.createElement("span");
         label.className = "roster-name";
         label.textContent = name;
-
-        chip.appendChild(avatar);
-        chip.appendChild(label);
+        textWrap.appendChild(label);
 
         if (applicant && applicant.position) {
           const posBadge = document.createElement("span");
           posBadge.className = "roster-position-badge";
           if (posColorVar) posBadge.style.setProperty("--pos-color", posColorVar);
           posBadge.textContent = applicant.position;
-          chip.appendChild(posBadge);
+          textWrap.appendChild(posBadge);
         }
+
+        chip.appendChild(avatar);
+        chip.appendChild(textWrap);
 
         rosterListEl.appendChild(chip);
 
