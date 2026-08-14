@@ -226,6 +226,24 @@ main {
 
 .section-sub { color: var(--fc-text-dim); font-size: 0.85rem; font-weight: 600; }
 
+/* 전술보드 제목 옆 가로/세로 전환 버튼 */
+.board-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.orientation-toggle {
+  display: flex;
+  gap: 6px;
+}
+
+.orientation-btn {
+  padding: 5px 12px;
+  font-size: 0.75rem;
+}
+
 .panel {
   background: var(--fc-panel);
   border: 1px solid var(--fc-panel-border);

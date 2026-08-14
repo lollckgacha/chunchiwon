@@ -174,6 +174,17 @@
   box-shadow: 0 0 10px rgba(77, 159, 255, 0.35);
 }
 
+.draw-btn--dummy {
+  background: rgba(83, 247, 186, 0.1);
+  border-color: var(--fc-green-dim);
+  color: var(--fc-green);
+}
+
+.draw-btn--dummy:hover {
+  background: rgba(83, 247, 186, 0.18);
+  color: var(--fc-green);
+}
+
 .drawing-hint {
   color: var(--fc-text-dim);
   font-size: 0.68rem;
@@ -461,6 +472,19 @@
   transform: translate(-50%, -50%);
   z-index: 5;
   transition: left 0.35s cubic-bezier(0.34, 1.2, 0.36, 1), top 0.35s cubic-bezier(0.34, 1.2, 0.36, 1);
+}
+
+/* 더미선수 — 이름/사진 없이 사이트 메인 컬러(민트)로만 채운 표시용 코인 */
+.player-chip--dummy {
+  background: var(--fc-green);
+  border-color: var(--fc-green-dim);
+  width: 8%;
+  min-width: 22px;
+  max-width: 38px;
+}
+
+.player-chip--dummy.dragging {
+  transition: none;
 }
 
 /* 드래그로 직접 옮기는 중에는 트랜지션 없이 손가락(커서)을 바로 따라가야 함 */

@@ -339,6 +339,10 @@
   let currentStroke = null;
   let drawingCanvasEl = null;
 
+  // 그라운드 방향(가로/세로) — 같은 이유로 여기서 미리 선언해둔다
+  const ORIENTATION_STORAGE_KEY = "cheonchiwon-s2-formation-orientation-v1";
+  let pitchOrientation = localStorage.getItem(ORIENTATION_STORAGE_KEY) === "portrait" ? "portrait" : "landscape";
+
   const TAB_IDS = Array.from(document.querySelectorAll(".nav-tab[data-tab]")).map((b) => b.dataset.tab);
   const DEFAULT_TAB_ID = TAB_IDS[0];
 
@@ -534,8 +538,10 @@
     pitch.style.height = "";
     // 스타일을 되돌린 직후 바로 측정하면(getBoundingClientRect 호출 시 브라우저가
     // 강제로 동기 레이아웃을 계산해줌) 프레임을 기다릴 필요 없이 바로 정확한 값을 잴 수 있다.
+    const isPortrait = pitchOrientation === "portrait";
+    const aspect = isPortrait ? 86 / 109 : 109 / 86; // 가로:세로 비율 (세로 모드는 뒤집힘)
     const targetHeight = Math.max(360, window.innerHeight * 0.9);
-    const targetWidth = targetHeight * (109 / 86);
+    const targetWidth = targetHeight * aspect;
 
     const GAP = 24; // 패널과 그라운드 사이에 남길 여백
     const wrapRect = wrap.getBoundingClientRect();
@@ -544,12 +550,50 @@
     const maxWidth = Math.max(320, wrapRect.width - Math.max(0, rosterReserve) - Math.max(0, toolsReserve));
 
     const finalWidth = Math.min(targetWidth, maxWidth);
-    const finalHeight = finalWidth * (86 / 109);
+    const finalHeight = finalWidth / aspect;
 
     pitch.style.width = finalWidth + "px";
     pitch.style.height = finalHeight + "px";
 
+    applyPitchOrientationToSvg(pitch, finalWidth, finalHeight);
     resizeDrawingCanvas(); // 그라운드 크기가 바뀌었으니 그리기 캔버스도 같이 다시 맞춘다
+  }
+
+  // 세로 모드에서는 그라운드 그림(SVG)만 90도 돌려서 채운다. 선수 칩/그리기는
+  // 그대로 박스 기준 0~100% 좌표를 쓰기 때문에 별도 처리가 필요 없다 —
+  // 그림만 돌아간 상자에 맞게 다시 그려지는 셈
+  function applyPitchOrientationToSvg(pitchEl, boxWidth, boxHeight) {
+    const svg = pitchEl.querySelector(":scope > svg");
+    if (!svg) return;
+    if (pitchOrientation === "portrait") {
+      svg.style.position = "absolute";
+      svg.style.top = "50%";
+      svg.style.left = "50%";
+      svg.style.width = boxHeight + "px";
+      svg.style.height = boxWidth + "px";
+      svg.style.transform = "translate(-50%, -50%) rotate(90deg)";
+    } else {
+      svg.style.position = "";
+      svg.style.top = "";
+      svg.style.left = "";
+      svg.style.width = "";
+      svg.style.height = "";
+      svg.style.transform = "";
+    }
+  }
+
+  // 그라운드 그림이 90도 돌아가면, 그 위에 놓인 선수/더미 위치나 그려둔 선도
+  // 같은 실제 지점을 계속 가리키도록 좌표를 같이 돌려준다.
+  // toOrientation === "portrait"면 시계방향, 다시 "landscape"로 돌아가면 반시계방향으로 되돌린다.
+  function rotateCoordForOrientation(x, y, toOrientation) {
+    if (toOrientation === "portrait") return { x: 100 - y, y: x };
+    return { x: y, y: 100 - x };
+  }
+
+  function pitchHintTextFor(orientation) {
+    return orientation === "portrait"
+      ? "그라운드 안은 선발, 좌우 사이드라인 밖 어두운 공간은 벤치예요. 다시 드래그해서 옮길 수 있고, ×를 누르거나 명단 쪽으로 끌면 제거돼요."
+      : "그라운드 안은 선발, 위아래 사이드라인 밖 어두운 공간은 벤치예요. 다시 드래그해서 옮길 수 있고, ×를 누르거나 명단 쪽으로 끌면 제거돼요.";
   }
 
   window.addEventListener("resize", fitPitchToViewport);
@@ -814,6 +858,134 @@
       saveState();
     }
 
+    /* -------------------------------------------------------------- */
+    /* 더미선수 — 이름/사진 없이 사이트 메인 컬러 코인만 그라운드에 놓는 표식     */
+    /* (지원자 명단과 무관하게 도구 패널에서 바로 추가/이동/삭제)                */
+    /* -------------------------------------------------------------- */
+    const DUMMY_STORAGE_KEY = "cheonchiwon-s2-formation-dummies-v1";
+
+    function loadDummyTokens() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(DUMMY_STORAGE_KEY) || "[]");
+        if (!Array.isArray(parsed)) return [];
+        return parsed.filter((d) => d && typeof d.id === "string" && typeof d.x === "number" && typeof d.y === "number");
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function saveDummyTokens() {
+      localStorage.setItem(DUMMY_STORAGE_KEY, JSON.stringify(dummyTokens));
+    }
+
+    let dummyTokens = loadDummyTokens();
+
+    function addDummyToken() {
+      dummyTokens.push({ id: "dummy-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7), x: 50, y: 50 });
+      saveDummyTokens();
+      renderDummyTokens();
+    }
+
+    function removeDummyToken(id) {
+      dummyTokens = dummyTokens.filter((d) => d.id !== id);
+      saveDummyTokens();
+      renderDummyTokens();
+    }
+
+    function renderDummyTokens() {
+      pitchTokensEl.querySelectorAll(".player-chip--dummy").forEach((el) => el.remove());
+      dummyTokens.forEach((d) => createDummyChip(d));
+    }
+
+    function createDummyChip(d) {
+      const chip = document.createElement("div");
+      chip.className = "player-chip player-chip--field player-chip--dummy";
+      chip.dataset.dummyId = d.id;
+      chip.title = "더미선수";
+      chip.style.left = d.x + "%";
+      chip.style.top = d.y + "%";
+
+      const removeBtn = document.createElement("span");
+      removeBtn.className = "token-remove";
+      removeBtn.textContent = "×";
+      removeBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+      removeBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        removeDummyToken(d.id);
+      });
+      chip.appendChild(removeBtn);
+
+      chip.addEventListener("pointerdown", (e) => startDummyDrag(e, chip, d));
+      pitchTokensEl.appendChild(chip);
+    }
+
+    function startDummyDrag(e, chip, d) {
+      if (e.button !== undefined && e.button !== 0) return;
+      e.preventDefault();
+      chip.classList.add("dragging");
+      try { chip.setPointerCapture(e.pointerId); } catch (err) {}
+
+      function onMove(ev) {
+        const rect = pitchTokensEl.getBoundingClientRect();
+        const xPct = clampPct(((ev.clientX - rect.left) / rect.width) * 100);
+        const yPct = clampPct(((ev.clientY - rect.top) / rect.height) * 100);
+        d.x = xPct;
+        d.y = yPct;
+        chip.style.left = xPct + "%";
+        chip.style.top = yPct + "%";
+      }
+
+      function onUp() {
+        chip.classList.remove("dragging");
+        chip.removeEventListener("pointermove", onMove);
+        chip.removeEventListener("pointerup", onUp);
+        chip.removeEventListener("pointercancel", onUp);
+        saveDummyTokens();
+      }
+
+      chip.addEventListener("pointermove", onMove);
+      chip.addEventListener("pointerup", onUp);
+      chip.addEventListener("pointercancel", onUp);
+    }
+
+    /* -------------------------------------------------------------- */
+    /* 그라운드 방향(가로/세로) 전환                                          */
+    /* -------------------------------------------------------------- */
+    function setOrientation(newOrientation) {
+      if (newOrientation === pitchOrientation || (newOrientation !== "portrait" && newOrientation !== "landscape")) return;
+
+      // 이미 놓인 선수/더미/그림이 같은 실제 지점을 계속 가리키도록 좌표를 같이 돌린다
+      Object.keys(positions).forEach((name) => {
+        const p = positions[name];
+        const r = rotateCoordForOrientation(p.x, p.y, newOrientation);
+        positions[name] = { x: clampPct(r.x), y: clampPct(r.y) };
+      });
+      dummyTokens.forEach((d) => {
+        const r = rotateCoordForOrientation(d.x, d.y, newOrientation);
+        d.x = clampPct(r.x);
+        d.y = clampPct(r.y);
+      });
+      strokes.forEach((s) => {
+        s.points = s.points.map((pt) => rotateCoordForOrientation(pt.x, pt.y, newOrientation));
+      });
+
+      pitchOrientation = newOrientation;
+      localStorage.setItem(ORIENTATION_STORAGE_KEY, pitchOrientation);
+      saveState();
+      saveDummyTokens();
+      saveStrokes();
+
+      document.querySelectorAll(".orientation-btn[data-orientation]").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.orientation === pitchOrientation);
+      });
+      const hintEl = document.getElementById("pitch-hint");
+      if (hintEl) hintEl.textContent = pitchHintTextFor(pitchOrientation);
+
+      fitPitchToViewport(); // 그라운드 크기/그림(SVG) 방향과 그리기 캔버스를 다시 맞춘다
+      renderAll();
+      renderDummyTokens();
+    }
+
     function loadState() {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
@@ -837,8 +1009,11 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify(positions));
     }
 
-    function isOnGrass(yPct) {
-      return yPct >= GRASS_TOP_PCT && yPct <= GRASS_BOTTOM_PCT;
+    // 세로 모드에서는 그라운드 그림이 90도 돌아가 있어서, 벤치(사이드라인 밖) 공간이
+    // 위/아래가 아니라 좌/우 가장자리로 옮겨간다 — 그래서 어느 축을 볼지 방향에 따라 바꿔준다
+    function isOnGrass(xPct, yPct) {
+      const v = pitchOrientation === "portrait" ? xPct : yPct;
+      return v >= GRASS_TOP_PCT && v <= GRASS_BOTTOM_PCT;
     }
 
     function clampPct(v) {
@@ -855,7 +1030,7 @@
 
     function updateCounts() {
       const names = Object.keys(positions);
-      const onGrass = names.filter((n) => isOnGrass(positions[n].y)).length;
+      const onGrass = names.filter((n) => isOnGrass(positions[n].x, positions[n].y)).length;
       const onBench = names.length - onGrass;
       placedCountEl.textContent = `그라운드 ${onGrass} · 벤치 ${onBench} / 전체 ${allPlayerNames().length}`;
     }
@@ -897,8 +1072,8 @@
       const all = Array.from(applicantByName.values());
       const customOnes = all.filter((a) => a.custom);
       const normalOnes = all.filter((a) => !a.custom);
-      // 직접 추가한 선수는 정렬 기준과 무관하게 항상 명단 맨 아래에 모아둔다
-      const sorted = normalOnes.sort(comparator).concat(customOnes.sort(sortByName)).map((a) => a.name);
+      // 직접 추가한 선수는 정렬 기준과 무관하게 항상 명단 맨 위에 모아둔다
+      const sorted = customOnes.sort(sortByName).concat(normalOnes.sort(comparator)).map((a) => a.name);
       sorted.forEach((name) => {
         const applicant = applicantByName.get(name);
         const chip = document.createElement("div");
@@ -965,8 +1140,9 @@
     }
 
     function renderPitch() {
+      // 더미선수 코인은 이름이 없는 별도 토큰이라 여기서는 건드리지 않는다 (renderDummyTokens가 따로 관리)
       const existing = new Map();
-      pitchTokensEl.querySelectorAll(".player-chip").forEach((el) => existing.set(el.dataset.name, el));
+      pitchTokensEl.querySelectorAll(".player-chip:not(.player-chip--dummy)").forEach((el) => existing.set(el.dataset.name, el));
 
       existing.forEach((el, name) => {
         if (!Object.prototype.hasOwnProperty.call(positions, name)) el.remove();
@@ -994,7 +1170,7 @@
 
       chip.style.left = xPct + "%";
       chip.style.top = yPct + "%";
-      chip.classList.toggle("player-chip--bench-zone", !isOnGrass(yPct));
+      chip.classList.toggle("player-chip--bench-zone", !isOnGrass(xPct, yPct));
 
       if (isBeingDropped) {
         void chip.offsetWidth; // 강제 리플로우: 트랜지션 없이 위치가 바로 반영되게 확정
@@ -1014,7 +1190,7 @@
     function createChip(name, xPct, yPct) {
       const applicant = applicantByName.get(name);
       const chip = document.createElement("div");
-      chip.className = "player-chip player-chip--field" + (isOnGrass(yPct) ? "" : " player-chip--bench-zone");
+      chip.className = "player-chip player-chip--field" + (isOnGrass(xPct, yPct) ? "" : " player-chip--bench-zone");
       chip.dataset.name = name;
       chip.title = name;
       chip.style.left = xPct + "%";
@@ -1118,7 +1294,8 @@
     }
 
     function findChipAt(clientX, clientY, excludeName) {
-      const chips = pitchTokensEl.querySelectorAll(".player-chip");
+      // 더미선수 코인은 이름이 없어 자리 교환 대상이 될 수 없으니 검색에서 제외
+      const chips = pitchTokensEl.querySelectorAll(".player-chip:not(.player-chip--dummy)");
       for (const chip of chips) {
         if (chip.dataset.name === excludeName) continue;
         const r = chip.getBoundingClientRect();
@@ -1278,12 +1455,28 @@
     });
 
     btnClear.addEventListener("click", () => {
-      if (Object.keys(positions).length === 0) return;
-      if (!confirm("그라운드와 벤치에 배치된 지원자를 모두 명단으로 되돌릴까요?")) return;
+      if (Object.keys(positions).length === 0 && dummyTokens.length === 0) return;
+      if (!confirm("그라운드와 벤치에 배치된 지원자와 더미선수를 모두 되돌릴까요?")) return;
       positions = {};
+      dummyTokens = [];
       renderAll();
+      renderDummyTokens();
       saveState();
+      saveDummyTokens();
     });
+
+    const btnAddDummy = document.getElementById("btn-add-dummy");
+    if (btnAddDummy) {
+      btnAddDummy.addEventListener("click", addDummyToken);
+    }
+
+    // 가로/세로 그라운드 전환 버튼
+    document.querySelectorAll(".orientation-btn[data-orientation]").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.orientation === pitchOrientation);
+      btn.addEventListener("click", () => setOrientation(btn.dataset.orientation));
+    });
+    const pitchHintEl = document.getElementById("pitch-hint");
+    if (pitchHintEl) pitchHintEl.textContent = pitchHintTextFor(pitchOrientation);
 
     // 명단 접기/펼치기 — 접으면 그라운드가 그만큼 넓어진다
     // 명단(좌측)/도구(우측) 플로팅 패널 접기·펼치기 — 회전 표시는 CSS가 처리
@@ -1304,6 +1497,7 @@
 
     positions = loadState();
     renderAll();
+    renderDummyTokens();
     fitPitchToViewport();
   }
 

@@ -92,7 +92,13 @@
   <!-- ================= 전술보드 ================= -->
   <section id="tab-board" class="tab-panel">
     <div class="section-head">
-      <h2 class="section-title">전술보드</h2>
+      <div class="board-title-row">
+        <h2 class="section-title">전술보드</h2>
+        <div class="orientation-toggle">
+          <button id="orientation-landscape" class="sort-btn orientation-btn active" data-orientation="landscape" type="button">↔ 가로</button>
+          <button id="orientation-portrait" class="sort-btn orientation-btn" data-orientation="portrait" type="button">↕ 세로</button>
+        </div>
+      </div>
     </div>
 
     <div class="board-stage">
@@ -150,7 +156,7 @@
           </svg>
           <div id="pitch-tokens" class="pitch-tokens"></div>
         </div>
-        <p class="pitch-hint">그라운드 안은 선발, 위아래 사이드라인 밖 어두운 공간은 벤치예요. 다시 드래그해서 옮길 수 있고, ×를 누르거나 명단 쪽으로 끌면 제거돼요.</p>
+        <p id="pitch-hint" class="pitch-hint">그라운드 안은 선발, 위아래 사이드라인 밖 어두운 공간은 벤치예요. 다시 드래그해서 옮길 수 있고, ×를 누르거나 명단 쪽으로 끌면 제거돼요.</p>
       </div>
 
       <!-- 좌측 플로팅: 지원자 명단 -->
@@ -181,6 +187,7 @@
         </div>
         <div class="floating-panel-body">
           <div class="drawing-toolbar-v">
+            <button id="btn-add-dummy" class="draw-btn draw-btn--dummy">🟢 더미선수 추가</button>
             <button id="draw-red" class="draw-btn draw-btn--red" data-color="red">🔴 빨간펜</button>
             <button id="draw-blue" class="draw-btn draw-btn--blue" data-color="blue">🔵 파란펜</button>
             <button id="draw-undo" class="draw-btn">↩ 되돌리기</button>
