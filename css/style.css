@@ -226,6 +226,17 @@ main {
 
 .section-sub { color: var(--fc-text-dim); font-size: 0.85rem; font-weight: 600; }
 
+/* 지통실 — 필터 버튼들과 같은 줄, 맨 오른쪽에 놓이는 방송 새로고침 버튼
+   (모양은 .sort-btn과 동일, 위치만 margin-left:auto로 오른쪽 끝에 붙임) */
+.control-refresh-btn {
+  margin-left: auto;
+}
+
+.control-refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* 전술보드 제목 옆 가로/세로 전환 버튼 */
 .board-title-row {
   display: flex;

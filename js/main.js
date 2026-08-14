@@ -357,6 +357,23 @@
     renderControlGrid();
   }
 
+  // 사이트 전체를 새로고침하지 않고, 방송 정보(SOOP)만 다시 불러온다.
+  // getStationData가 station별로 결과를 캐싱해두기 때문에, 그 캐시부터 지워야
+  // 실제로 새 데이터를 다시 요청한다.
+  async function refreshControlRoom() {
+    const btn = document.getElementById("control-refresh-btn");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "새로고침 중...";
+    }
+    DATA.APPLICANTS.forEach((a) => stationCache.delete(a.station));
+    await renderControlRoom();
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "방송 새로고침";
+    }
+  }
+
   document.querySelectorAll(".control-toolbar .sort-btn[data-sort]").forEach((btn) => {
     btn.addEventListener("click", () => {
       if (btn.dataset.sort === controlSortMode) return;
@@ -374,6 +391,11 @@
       controlOnlyFC26Btn.classList.toggle("active", controlOnlyFC26);
       renderControlGrid();
     });
+  }
+
+  const controlRefreshBtn = document.getElementById("control-refresh-btn");
+  if (controlRefreshBtn) {
+    controlRefreshBtn.addEventListener("click", refreshControlRoom);
   }
 
   /* ------------------------------------------------------------------ */
