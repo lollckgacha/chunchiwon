@@ -438,8 +438,9 @@
     // (안 보이는 동안엔 실측이 불가능해서 렌더 시점엔 계산을 건너뛰었음)
     if (tabId === "tab-board") {
       fitPitchToViewport();
-      const stage = document.querySelector(".board-stage");
-      if (stage) stage.scrollIntoView({ behavior: "auto", block: "start" });
+      // 다른 탭들처럼 맨 위(상단 메뉴가 보이는 상태)에서 시작한다.
+      // 아래로 스크롤하면 여전히 상단 바가 화면 밖으로 나가는 프레젠테이션 모드가 된다.
+      window.scrollTo(0, 0);
     }
     if (tabId === "tab-schedule") fitCalendarToViewport();
   }
