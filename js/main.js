@@ -571,7 +571,7 @@
       svg.style.left = "50%";
       svg.style.width = boxHeight + "px";
       svg.style.height = boxWidth + "px";
-      svg.style.transform = "translate(-50%, -50%) rotate(90deg)";
+      svg.style.transform = "translate(-50%, -50%) rotate(-90deg)"; // 반시계 방향 — 가로일 때의 왼쪽이 세로에서 아래로
     } else {
       svg.style.position = "";
       svg.style.top = "";
@@ -584,10 +584,10 @@
 
   // 그라운드 그림이 90도 돌아가면, 그 위에 놓인 선수/더미 위치나 그려둔 선도
   // 같은 실제 지점을 계속 가리키도록 좌표를 같이 돌려준다.
-  // toOrientation === "portrait"면 시계방향, 다시 "landscape"로 돌아가면 반시계방향으로 되돌린다.
+  // toOrientation === "portrait"면 반시계방향(왼쪽→아래), 다시 "landscape"로 돌아가면 그 반대(시계방향)로 되돌린다.
   function rotateCoordForOrientation(x, y, toOrientation) {
-    if (toOrientation === "portrait") return { x: 100 - y, y: x };
-    return { x: y, y: 100 - x };
+    if (toOrientation === "portrait") return { x: y, y: 100 - x };
+    return { x: 100 - y, y: x };
   }
 
   function pitchHintTextFor(orientation) {
@@ -919,28 +919,46 @@
       pitchTokensEl.appendChild(chip);
     }
 
+    // 지원자 코인과 같은 방식 — 드래그하는 동안은 마우스를 따라다니는 고스트만 보이고
+    // (원본은 숨김), 놓는 순간 트랜지션 없이 그 자리에 바로 스냅된다
     function startDummyDrag(e, chip, d) {
       if (e.button !== undefined && e.button !== 0) return;
       e.preventDefault();
+
+      const ghost = document.createElement("div");
+      ghost.className = "player-chip player-chip--ghost player-chip--dummy";
+      document.body.appendChild(ghost);
+      moveGhost(ghost, e.clientX, e.clientY);
+
       chip.classList.add("dragging");
       try { chip.setPointerCapture(e.pointerId); } catch (err) {}
 
       function onMove(ev) {
-        const rect = pitchTokensEl.getBoundingClientRect();
-        const xPct = clampPct(((ev.clientX - rect.left) / rect.width) * 100);
-        const yPct = clampPct(((ev.clientY - rect.top) / rect.height) * 100);
-        d.x = xPct;
-        d.y = yPct;
-        chip.style.left = xPct + "%";
-        chip.style.top = yPct + "%";
+        moveGhost(ghost, ev.clientX, ev.clientY);
       }
 
-      function onUp() {
-        chip.classList.remove("dragging");
+      function onUp(ev) {
         chip.removeEventListener("pointermove", onMove);
         chip.removeEventListener("pointerup", onUp);
         chip.removeEventListener("pointercancel", onUp);
-        saveDummyTokens();
+        ghost.remove();
+
+        const rect = pitchTokensEl.getBoundingClientRect();
+        const inPitch = ev.clientX >= rect.left && ev.clientX <= rect.right && ev.clientY >= rect.top && ev.clientY <= rect.bottom;
+        if (inPitch) {
+          const xPct = clampPct(((ev.clientX - rect.left) / rect.width) * 100);
+          const yPct = clampPct(((ev.clientY - rect.top) / rect.height) * 100);
+          d.x = xPct;
+          d.y = yPct;
+          // 트랜지션 강제로 끈 채로 최종 위치를 먼저 반영한 뒤 원본을 다시 보여준다
+          chip.style.transition = "none";
+          chip.style.left = xPct + "%";
+          chip.style.top = yPct + "%";
+          void chip.offsetWidth;
+          chip.style.transition = "";
+          saveDummyTokens();
+        }
+        chip.classList.remove("dragging");
       }
 
       chip.addEventListener("pointermove", onMove);
@@ -1418,6 +1436,141 @@
     }
 
     /* -------------------------------------------------------------- */
+    /* 그라운드 스크린샷 — 캔버스에 새로 그려서 PNG로 내려받는다.               */
+    /* (SOOP에서 불러온 프로필 사진은 다른 도메인 이미지라 캔버스에 그대로     */
+    /* 박아 내보내면 브라우저 보안 정책에 막히기 때문에, 사진 대신 포지션      */
+    /* 색이 칠해진 원 + 이름으로 그린다. 로고는 우리 사이트 파일이라 그대로    */
+    /* 그릴 수 있어서 직접추가 선수는 천치원 로고가 그대로 나온다)             */
+    /* -------------------------------------------------------------- */
+    function resolvePosColorHex(position) {
+      const group = primaryPositionGroup(position);
+      const varName = `--pos-${group || "none"}`;
+      const val = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+      return val || "#53f7ba";
+    }
+
+    async function exportPitchAsImage() {
+      const rect = pitchEl.getBoundingClientRect();
+      const boxWidth = rect.width;
+      const boxHeight = rect.height;
+      if (!boxWidth || !boxHeight) return;
+
+      const scale = 2; // 다운로드했을 때 더 선명하게 보이도록 2배 해상도로 그림
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(boxWidth * scale);
+      canvas.height = Math.round(boxHeight * scale);
+      const ctx = canvas.getContext("2d");
+      ctx.scale(scale, scale);
+
+      ctx.fillStyle = "#0d3d20";
+      ctx.fillRect(0, 0, boxWidth, boxHeight);
+
+      // 그라운드 라인(SVG)을 이미지로 바꿔서 그린다 — 세로 모드면 화면에 보이는 그대로 회전해서.
+      // 세로 모드에서는 실제 svg 요소에 회전용 인라인 style이 이미 붙어있으니, 복제본에서
+      // 그 style을 지우고 "돌아가지 않은 원본" 그림을 얻은 뒤 캔버스에서 직접 회전시킨다
+      // (안 지우면 인라인 회전 + 캔버스 회전이 겹쳐서 그림이 이중으로 돌아가 버림)
+      try {
+        const svgEl = pitchEl.querySelector(":scope > svg");
+        const svgClone = svgEl.cloneNode(true);
+        svgClone.removeAttribute("style");
+        const svgMarkup = new XMLSerializer().serializeToString(svgClone);
+        const svgDataUrl = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgMarkup);
+        const svgImg = await loadImageEl(svgDataUrl);
+        ctx.save();
+        if (pitchOrientation === "portrait") {
+          ctx.translate(boxWidth / 2, boxHeight / 2);
+          ctx.rotate(-Math.PI / 2);
+          ctx.drawImage(svgImg, -boxHeight / 2, -boxWidth / 2, boxHeight, boxWidth);
+        } else {
+          ctx.drawImage(svgImg, 0, 0, boxWidth, boxHeight);
+        }
+        ctx.restore();
+      } catch (err) {
+        // 그림 로드가 실패해도 아래 선/마커는 계속 그려서 최소한의 결과물은 남긴다
+      }
+
+      // 그려둔 펜 선
+      strokes.forEach((s) => paintStroke(ctx, { width: boxWidth, height: boxHeight }, s));
+
+      const chipDiameter = Math.min(62, Math.max(36, boxWidth * 0.12)); // .player-chip--field와 동일한 크기 규칙
+      const r = chipDiameter / 2;
+
+      // 직접추가 선수는 천치원 로고가 같은 도메인 파일이라 캔버스에 그대로 그려도 안전하다
+      let logoImg = null;
+      if (Array.from(applicantByName.values()).some((a) => a.custom && positions[a.name])) {
+        try { logoImg = await loadImageEl("logo.png"); } catch (err) { logoImg = null; }
+      }
+
+      // 더미선수 코인 (사이트 메인 컬러 단색)
+      dummyTokens.forEach((d) => {
+        const cx = (d.x / 100) * boxWidth;
+        const cy = (d.y / 100) * boxHeight;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fillStyle = "#53f7ba";
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#35c996";
+        ctx.stroke();
+      });
+
+      // 배치된 지원자 — 포지션 색 테두리 원 + 이름 (직접추가 선수는 로고 사진)
+      Object.keys(positions).forEach((name) => {
+        const p = positions[name];
+        const applicant = applicantByName.get(name);
+        const cx = (p.x / 100) * boxWidth;
+        const cy = (p.y / 100) * boxHeight;
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fillStyle = "#151d24";
+        ctx.fill();
+
+        if (applicant && applicant.custom && logoImg) {
+          ctx.save();
+          ctx.clip();
+          const side = Math.min(logoImg.width, logoImg.height);
+          const sx = (logoImg.width - side) / 2;
+          const sy = (logoImg.height - side) / 2;
+          ctx.drawImage(logoImg, sx, sy, side, side, cx - r, cy - r, r * 2, r * 2);
+          ctx.restore();
+        } else {
+          ctx.fillStyle = "#ffffff";
+          ctx.font = `700 ${Math.max(10, r * 0.5)}px "Segoe UI", "Malgun Gothic", sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(name.charAt(0), cx, cy);
+        }
+
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = resolvePosColorHex(applicant && applicant.position);
+        ctx.stroke();
+
+        ctx.fillStyle = "#e9fff2";
+        ctx.font = `700 ${Math.max(9, r * 0.34)}px "Segoe UI", "Malgun Gothic", sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        ctx.fillText(name, cx, cy + r + 6);
+      });
+
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          alert("이미지 생성에 실패했어요. 다시 시도해주세요.");
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `천치원-전술보드-${stamp}.png`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+      }, "image/png");
+    }
+
+    /* -------------------------------------------------------------- */
     /* 초기화                                                              */
     /* -------------------------------------------------------------- */
     rosterSearchEl.addEventListener("input", filterRoster);
@@ -1468,6 +1621,14 @@
     const btnAddDummy = document.getElementById("btn-add-dummy");
     if (btnAddDummy) {
       btnAddDummy.addEventListener("click", addDummyToken);
+    }
+
+    const btnScreenshot = document.getElementById("btn-screenshot");
+    if (btnScreenshot) {
+      btnScreenshot.addEventListener("click", () => {
+        btnScreenshot.disabled = true;
+        exportPitchAsImage().finally(() => { btnScreenshot.disabled = false; });
+      });
     }
 
     // 가로/세로 그라운드 전환 버튼
