@@ -409,6 +409,17 @@ main {
   font-size: 1.02rem;
 }
 
+/* 좋아요수(스프레드시트 F열) — 0보다 클 때만 표시 */
+.post-feed-likes {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--pos-fw);
+  background: rgba(255,90,90,0.12);
+  padding: 2px 9px;
+  border-radius: 999px;
+}
+
 /* 지원글로 이동하는 버튼 — 스프레드시트 E열에 지원글 링크가 있으면 그 글로,
    없으면 모집 게시글로 이동한다 */
 .post-feed-postlink {

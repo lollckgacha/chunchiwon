@@ -115,6 +115,13 @@
     return sortByName(a, b);
   }
 
+  // 좋아요 많은 순 (스프레드시트 F열) — 값이 같으면 가나다순으로
+  function sortByLikes(a, b) {
+    const diff = (b.likeCount || 0) - (a.likeCount || 0);
+    if (diff !== 0) return diff;
+    return sortByName(a, b);
+  }
+
   const POSITION_GROUP_ORDER = ["gk", "df", "mf", "fw"];
 
   // 포지션 표기(예: "FB / CDM")를 색상 그룹별로 묶는다. 같은 그룹끼리는 한 묶음으로
@@ -165,6 +172,7 @@
           position: a.position ? String(a.position) : "",
           photo: a.photo ? String(a.photo) : "",
           postUrl: a.postUrl ? String(a.postUrl) : "",
+          likeCount: Number(a.likeCount) || 0,
         }));
     } catch (e) {
       return null;
@@ -226,6 +234,7 @@
         <a class="applicant-avatar post-feed-avatar" data-role="avatar" data-station="${esc(a.station)}" href="${esc(stationUrl(a.station))}" target="_blank" rel="noopener noreferrer" title="${esc(a.name)} 방송국으로 이동">${avatarInnerHTML(a)}</a>
         <span class="post-feed-name">${esc(a.name)}</span>
         ${positionBadgeHTML(a.position)}
+        ${a.likeCount > 0 ? `<span class="post-feed-likes">❤ ${a.likeCount}</span>` : ""}
         ${postLinkUrl ? `<a class="post-feed-postlink" href="${esc(postLinkUrl)}" target="_blank" rel="noopener noreferrer">지원글 보기 ↗</a>` : ""}
         <button class="post-feed-toggle" type="button" aria-expanded="false">더보기 ▾</button>
       </header>
@@ -247,7 +256,13 @@
     }
   }
 
-  let postFeedSortMode = "name"; // "name" | "position"
+  const POST_FEED_SORTERS = {
+    name: sortByName,
+    position: sortByPosition,
+    likes: sortByLikes,
+  };
+
+  let postFeedSortMode = "name"; // "name" | "position" | "likes"
   let postFeedSearchQuery = "";
 
   function applyPostFeedFilter() {
@@ -265,7 +280,7 @@
     const countEl = document.getElementById("post-feed-count");
     if (!feed) return;
 
-    const comparator = postFeedSortMode === "position" ? sortByPosition : sortByName;
+    const comparator = POST_FEED_SORTERS[postFeedSortMode] || sortByName;
     const sorted = DATA.APPLICANTS.slice().sort(comparator);
     feed.innerHTML = sorted.map(postFeedItemHTML).join("");
     if (countEl) countEl.textContent = `총 ${DATA.APPLICANTS.length}명 지원`;
