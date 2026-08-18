@@ -1083,6 +1083,25 @@
     });
   }
 
+  // 그라운드 스크린샷(캔버스 내보내기) 전용 사진 로더 — SOOP 프로필 사진은 다른 도메인
+  // 이미지라 그냥 그리면 캔버스가 "오염"되어 파일로 저장할 수 없다. wsrv.nl(무료 공개
+  // 이미지 프록시)을 거쳐 CORS 허용 헤더가 붙은 사본을 받아오면 캔버스에 안전하게 구울 수
+  // 있다. 화면에 보여주는 일반 아바타(hookPhoto)는 이 경로를 안 타서 영향이 없고,
+  // 프록시가 느리거나 막히면 null을 돌려줘서 이니셜 표시로 자연스럽게 대체된다.
+  function loadImageForExport(url) {
+    return new Promise((resolve) => {
+      if (!url) {
+        resolve(null);
+        return;
+      }
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = "https://wsrv.nl/?url=" + encodeURIComponent(url);
+    });
+  }
+
   // cover 방식으로 이미지를 캔버스에 그린다 (중앙 크롭)
   function drawImageCover(canvas, source) {
     const ctx = canvas.getContext("2d");
@@ -1894,6 +1913,25 @@
         try { logoImg = await loadImageEl("logo.png"); } catch (err) { logoImg = null; }
       }
 
+      // 배치된 선수들의 실제 프로필 사진을 CORS 프록시를 거쳐 미리 받아온다
+      // (직접추가 선수는 위에서 이미 처리한 로고를 쓰므로 건너뜀). 실패해도
+      // photoImgByName에 안 들어갈 뿐, 아래에서 이니셜로 자연스럽게 대체된다
+      const photoImgByName = new Map();
+      await Promise.all(
+        Object.keys(positions).map(async (name) => {
+          const applicant = applicantByName.get(name);
+          if (!applicant || applicant.custom) return;
+          let url = applicant.photo || "";
+          if (!url && applicant.station) {
+            const data = await getStationData(applicant.station);
+            if (data && data.profile_image) url = protocolize(data.profile_image);
+          }
+          if (!url) return;
+          const img = await loadImageForExport(url);
+          if (img) photoImgByName.set(name, img);
+        })
+      );
+
       // 더미선수 코인 (사이트 메인 컬러 단색 + 중앙에 번호)
       dummyTokens.forEach((d) => {
         const cx = (d.x / 100) * boxWidth;
@@ -1925,13 +1963,14 @@
         ctx.fillStyle = "#151d24";
         ctx.fill();
 
-        if (applicant && applicant.custom && logoImg) {
+        const photoImg = applicant && applicant.custom ? logoImg : photoImgByName.get(name);
+        if (photoImg) {
           ctx.save();
           ctx.clip();
-          const side = Math.min(logoImg.width, logoImg.height);
-          const sx = (logoImg.width - side) / 2;
-          const sy = (logoImg.height - side) / 2;
-          ctx.drawImage(logoImg, sx, sy, side, side, cx - r, cy - r, r * 2, r * 2);
+          const side = Math.min(photoImg.width, photoImg.height);
+          const sx = (photoImg.width - side) / 2;
+          const sy = (photoImg.height - side) / 2;
+          ctx.drawImage(photoImg, sx, sy, side, side, cx - r, cy - r, r * 2, r * 2);
           ctx.restore();
         } else {
           ctx.fillStyle = "#ffffff";
@@ -2026,9 +2065,14 @@
 
     const btnScreenshot = document.getElementById("btn-screenshot");
     if (btnScreenshot) {
+      const btnScreenshotOriginalText = btnScreenshot.textContent;
       btnScreenshot.addEventListener("click", () => {
         btnScreenshot.disabled = true;
-        exportPitchAsImage().finally(() => { btnScreenshot.disabled = false; });
+        btnScreenshot.textContent = "만드는 중...";
+        exportPitchAsImage().finally(() => {
+          btnScreenshot.disabled = false;
+          btnScreenshot.textContent = btnScreenshotOriginalText;
+        });
       });
     }
 
