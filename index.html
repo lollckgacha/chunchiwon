@@ -51,13 +51,135 @@
     <div class="post-feed-toolbar">
       <input id="post-feed-search" class="post-feed-search" type="text" placeholder="닉네임 검색..." autocomplete="off" />
       <div class="post-feed-sort-toolbar">
-        <button class="sort-btn active" data-sort="name">가나다순</button>
-        <button class="sort-btn" data-sort="position">포지션순</button>
+        <button id="post-feed-position-filter-btn" class="sort-btn" type="button">포지션별 보기</button>
         <button class="sort-btn" data-sort="likes">UP순</button>
       </div>
     </div>
     <div id="post-feed" class="post-feed"></div>
   </section>
+
+  <!-- 포지션별 보기 필터 팝업 (지원자 탭) -->
+  <div id="position-filter-modal" class="modal-overlay" hidden>
+    <div class="modal-panel position-filter-panel" role="dialog" aria-modal="true" aria-labelledby="position-filter-title">
+      <div class="modal-head">
+        <h3 id="position-filter-title">포지션</h3>
+        <button id="position-filter-close" class="modal-close-btn" type="button" aria-label="닫기">×</button>
+      </div>
+      <div class="position-filter-rows">
+        <div class="position-filter-row">
+          <label class="position-filter-chip position-filter-chip--all"><input type="checkbox" data-group="fw" data-role="group-all" />FW 전체</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="ST" data-group="fw" />ST</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="CF" data-group="fw" />CF</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="LW" data-group="fw" />LW</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="RW" data-group="fw" />RW</label>
+        </div>
+        <div class="position-filter-row">
+          <label class="position-filter-chip position-filter-chip--all"><input type="checkbox" data-group="mf" data-role="group-all" />MF 전체</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="CM" data-group="mf" />CM</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="CAM" data-group="mf" />CAM</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="CDM" data-group="mf" />CDM</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="LM" data-group="mf" />LM</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="RM" data-group="mf" />RM</label>
+        </div>
+        <div class="position-filter-row">
+          <label class="position-filter-chip position-filter-chip--all"><input type="checkbox" data-group="df" data-role="group-all" />DF 전체</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="CB" data-group="df" />CB</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="RB" data-group="df" />RB</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="LB" data-group="df" />LB</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="RWB" data-group="df" />RWB</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="LWB" data-group="df" />LWB</label>
+        </div>
+        <div class="position-filter-row">
+          <label class="position-filter-chip position-filter-chip--all"><input type="checkbox" data-group="gk" data-role="group-all" />GK 전체</label>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button id="position-filter-reset" class="sort-btn" type="button">초기화</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 포지션별 보기 필터 팝업 (지통실 탭) -->
+  <div id="control-position-filter-modal" class="modal-overlay" hidden>
+    <div class="modal-panel position-filter-panel" role="dialog" aria-modal="true" aria-labelledby="control-position-filter-title">
+      <div class="modal-head">
+        <h3 id="control-position-filter-title">포지션</h3>
+        <button id="control-position-filter-close" class="modal-close-btn" type="button" aria-label="닫기">×</button>
+      </div>
+      <div class="position-filter-rows">
+        <div class="position-filter-row">
+          <label class="position-filter-chip position-filter-chip--all"><input type="checkbox" data-group="fw" data-role="group-all" />FW 전체</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="ST" data-group="fw" />ST</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="CF" data-group="fw" />CF</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="LW" data-group="fw" />LW</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="RW" data-group="fw" />RW</label>
+        </div>
+        <div class="position-filter-row">
+          <label class="position-filter-chip position-filter-chip--all"><input type="checkbox" data-group="mf" data-role="group-all" />MF 전체</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="CM" data-group="mf" />CM</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="CAM" data-group="mf" />CAM</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="CDM" data-group="mf" />CDM</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="LM" data-group="mf" />LM</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="RM" data-group="mf" />RM</label>
+        </div>
+        <div class="position-filter-row">
+          <label class="position-filter-chip position-filter-chip--all"><input type="checkbox" data-group="df" data-role="group-all" />DF 전체</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="CB" data-group="df" />CB</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="RB" data-group="df" />RB</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="LB" data-group="df" />LB</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="RWB" data-group="df" />RWB</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="LWB" data-group="df" />LWB</label>
+        </div>
+        <div class="position-filter-row">
+          <label class="position-filter-chip position-filter-chip--all"><input type="checkbox" data-group="gk" data-role="group-all" />GK 전체</label>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button id="control-position-filter-reset" class="sort-btn" type="button">초기화</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 포지션별 보기 필터 팝업 (전술보드 탭) -->
+  <div id="roster-position-filter-modal" class="modal-overlay" hidden>
+    <div class="modal-panel position-filter-panel" role="dialog" aria-modal="true" aria-labelledby="roster-position-filter-title">
+      <div class="modal-head">
+        <h3 id="roster-position-filter-title">포지션</h3>
+        <button id="roster-position-filter-close" class="modal-close-btn" type="button" aria-label="닫기">×</button>
+      </div>
+      <div class="position-filter-rows">
+        <div class="position-filter-row">
+          <label class="position-filter-chip position-filter-chip--all"><input type="checkbox" data-group="fw" data-role="group-all" />FW 전체</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="ST" data-group="fw" />ST</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="CF" data-group="fw" />CF</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="LW" data-group="fw" />LW</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="RW" data-group="fw" />RW</label>
+        </div>
+        <div class="position-filter-row">
+          <label class="position-filter-chip position-filter-chip--all"><input type="checkbox" data-group="mf" data-role="group-all" />MF 전체</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="CM" data-group="mf" />CM</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="CAM" data-group="mf" />CAM</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="CDM" data-group="mf" />CDM</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="LM" data-group="mf" />LM</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="RM" data-group="mf" />RM</label>
+        </div>
+        <div class="position-filter-row">
+          <label class="position-filter-chip position-filter-chip--all"><input type="checkbox" data-group="df" data-role="group-all" />DF 전체</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="CB" data-group="df" />CB</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="RB" data-group="df" />RB</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="LB" data-group="df" />LB</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="RWB" data-group="df" />RWB</label>
+          <label class="position-filter-chip"><input type="checkbox" data-token="LWB" data-group="df" />LWB</label>
+        </div>
+        <div class="position-filter-row">
+          <label class="position-filter-chip position-filter-chip--all"><input type="checkbox" data-group="gk" data-role="group-all" />GK 전체</label>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button id="roster-position-filter-reset" class="sort-btn" type="button">초기화</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ================= 지통실 (방송 현황판) ================= -->
   <section id="tab-control" class="tab-panel">
@@ -66,8 +188,7 @@
       <span class="section-sub" id="control-count">0명 지원</span>
     </div>
     <div class="control-toolbar">
-      <button class="sort-btn active" data-sort="position">포지션순</button>
-      <button class="sort-btn" data-sort="name">가나다순</button>
+      <button id="control-position-filter-btn" class="sort-btn" type="button">포지션별 보기</button>
       <button id="control-only-fc26" class="sort-btn active" type="button" title="방송 태그가 EA Sports FC 26인 방송만 보여줘요">잔디만 보기</button>
       <button id="control-refresh-btn" class="sort-btn control-refresh-btn" type="button">방송 새로고침</button>
     </div>
@@ -182,8 +303,7 @@
           </div>
           <input id="roster-search" class="roster-search" type="text" placeholder="닉네임 검색..." autocomplete="off" />
           <div class="roster-sort-toolbar">
-            <button class="sort-btn roster-sort-btn" data-sort="name">가나다순</button>
-            <button class="sort-btn roster-sort-btn active" data-sort="position">포지션순</button>
+            <button id="roster-position-filter-btn" class="sort-btn roster-sort-btn" type="button">포지션별 보기</button>
           </div>
           <div id="roster-list" class="roster-list"></div>
         </div>

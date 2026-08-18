@@ -379,6 +379,119 @@ main {
   gap: 8px;
 }
 
+/* ---------------------------------------------------------------- */
+/* 포지션별 보기 필터 팝업 — 지원자 탭                                     */
+/* ---------------------------------------------------------------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 20px;
+}
+
+.modal-overlay[hidden] { display: none; }
+
+.modal-panel {
+  background: var(--fc-panel);
+  border: 1px solid var(--fc-panel-border);
+  border-radius: 16px;
+  padding: 20px 24px 24px;
+  max-width: 560px;
+  width: 100%;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  margin-bottom: 18px;
+}
+
+.modal-head h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 900;
+}
+
+.modal-close-btn {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--fc-text-dim);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.modal-close-btn:hover { color: var(--fc-text); }
+
+.position-filter-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.position-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.position-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--fc-panel-border);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--fc-text-dim);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.position-filter-chip:hover {
+  border-color: var(--fc-green-dim);
+  color: var(--fc-text);
+}
+
+.position-filter-chip input[type="checkbox"] {
+  accent-color: var(--fc-green);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+
+.position-filter-chip.active {
+  background: rgba(83,247,186,0.14);
+  border-color: var(--fc-green);
+  color: var(--fc-green);
+}
+
+.position-filter-chip--all {
+  font-weight: 800;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
 .post-feed {
   display: flex;
   flex-direction: column;

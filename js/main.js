@@ -122,32 +122,162 @@
     return sortByName(a, b);
   }
 
-  const POSITION_GROUP_ORDER = ["gk", "df", "mf", "fw"];
-
   // 포지션 표기(예: "FB / CDM")를 색상 그룹별로 묶는다. 같은 그룹끼리는 한 묶음으로
   // 합쳐지고(예: "CB / SB" → df 하나), 색이 서로 다른 그룹이 섞여 있으면 그룹별로
   // 따로따로 나뉜다(예: "FB / CDM" → df 하나 + mf 하나) — 전술보드 명단에서 이
   // 각 묶음마다 배지를 하나씩 만들어서, 여러 포지션을 겸하는 선수가 해당하는
-  // 모든 색깔 자리에 다 보이게 하기 위함
+  // 모든 색깔 자리에 다 보이게 하기 위함.
+  // 배지 문구는 "적힌 포지션 전체"를 다 보여주되, 그 묶음 자신의 그룹에 속한
+  // 표기가 맨 앞에 오도록 순서를 바꾼다 (예: "FB / CDM"인 선수는 풀백(df) 배지에
+  // "FB / CDM", CDM(mf) 배지에는 "CDM / FB"로 표시됨)
   function positionGroupBuckets(position) {
     const tokens = String(position || "")
       .split(/[,/]/)
       .map((s) => s.trim().toUpperCase())
       .filter(Boolean);
-    if (tokens.length === 0) return [{ group: null, label: "" }];
+    if (tokens.length === 0) return [{ group: null, label: "", ownTokens: [] }];
 
     const order = [];
-    const map = new Map();
+    const seen = new Set();
     tokens.forEach((t) => {
       const group = POSITION_GROUP_BY_TOKEN[t] || null;
       const key = group || "__none__";
-      if (!map.has(key)) {
-        map.set(key, []);
+      if (!seen.has(key)) {
+        seen.add(key);
         order.push(key);
       }
-      map.get(key).push(t);
     });
-    return order.map((key) => ({ group: key === "__none__" ? null : key, label: map.get(key).join(" / ") }));
+
+    return order.map((key) => {
+      const groupVal = key === "__none__" ? null : key;
+      const own = [];
+      const rest = [];
+      tokens.forEach((t) => {
+        const g = POSITION_GROUP_BY_TOKEN[t] || null;
+        (g === groupVal ? own : rest).push(t);
+      });
+      // ownTokens: 이 묶음 자신의 그룹에 속하는 표기만 — 포지션별 보기 필터에서
+      // "이 배지가 그 포지션에 해당하는지"를 판단할 때 씀 (label과 달리 다른 그룹 표기는 안 섞임)
+      return { group: groupVal, label: own.concat(rest).join(" / "), ownTokens: own };
+    });
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 포지션별 보기 필터 팝업 — 지원자 / 지통실 / 전술보드 명단에서 공용으로 씀     */
+  /* "OO 전체"를 체크하면 그 그룹의 모든 표기가, 세부 칩만 체크하면 그 표기만       */
+  /* 대상이 된다. 둘은 서로 자동으로 맞춰진다("OO 전체" 체크 시 세부 칩도 전부      */
+  /* 체크되고, 세부 칩을 전부 체크하면 "OO 전체"도 자동으로 체크됨)               */
+  /* ------------------------------------------------------------------ */
+  function createPositionFilterController(opts) {
+    const modal = document.getElementById(opts.modalId);
+    const openBtn = document.getElementById(opts.openBtnId);
+    if (!modal || !openBtn) return null;
+
+    const closeBtn = opts.closeBtnId ? document.getElementById(opts.closeBtnId) : null;
+    const resetBtn = opts.resetBtnId ? document.getElementById(opts.resetBtnId) : null;
+    const state = { groups: new Set(), tokens: new Set() };
+
+    function setChipChecked(cb, checked) {
+      cb.checked = checked;
+      const chip = cb.closest(".position-filter-chip");
+      if (chip) chip.classList.toggle("active", checked);
+    }
+
+    function updateOpenBtnLabel() {
+      const count = state.groups.size + state.tokens.size;
+      openBtn.classList.toggle("active", count > 0);
+      openBtn.textContent = count > 0 ? `${opts.label} (${count})` : opts.label;
+    }
+
+    function closeModal() {
+      modal.hidden = true;
+    }
+
+    openBtn.addEventListener("click", () => {
+      modal.hidden = false;
+    });
+    if (closeBtn) closeBtn.addEventListener("click", closeModal);
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) closeModal(); // 어두운 배경 클릭 시 닫기
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !modal.hidden) closeModal();
+    });
+
+    modal.querySelectorAll('input[type="checkbox"][data-role="group-all"]').forEach((groupCb) => {
+      groupCb.addEventListener("change", () => {
+        const group = groupCb.dataset.group;
+        const siblingTokenCbs = modal.querySelectorAll(`input[data-token][data-group="${group}"]`);
+        if (groupCb.checked) {
+          state.groups.add(group);
+          siblingTokenCbs.forEach((tcb) => {
+            state.tokens.add(tcb.dataset.token);
+            setChipChecked(tcb, true);
+          });
+        } else {
+          state.groups.delete(group);
+          siblingTokenCbs.forEach((tcb) => {
+            state.tokens.delete(tcb.dataset.token);
+            setChipChecked(tcb, false);
+          });
+        }
+        setChipChecked(groupCb, groupCb.checked);
+        updateOpenBtnLabel();
+        opts.onChange();
+      });
+    });
+
+    modal.querySelectorAll('input[type="checkbox"][data-token]').forEach((tokenCb) => {
+      tokenCb.addEventListener("change", () => {
+        const token = tokenCb.dataset.token;
+        const group = tokenCb.dataset.group;
+        if (tokenCb.checked) state.tokens.add(token);
+        else state.tokens.delete(token);
+        setChipChecked(tokenCb, tokenCb.checked);
+
+        // 그룹 안의 세부 칩이 전부 체크됐는지에 따라 "OO 전체"도 같이 맞춰준다
+        if (group) {
+          const groupCb = modal.querySelector(`input[data-role="group-all"][data-group="${group}"]`);
+          const siblingTokenCbs = modal.querySelectorAll(`input[data-token][data-group="${group}"]`);
+          const allChecked = siblingTokenCbs.length > 0 && Array.from(siblingTokenCbs).every((cb) => cb.checked);
+          if (groupCb) {
+            if (allChecked) state.groups.add(group);
+            else state.groups.delete(group);
+            setChipChecked(groupCb, allChecked);
+          }
+        }
+        updateOpenBtnLabel();
+        opts.onChange();
+      });
+    });
+
+    if (resetBtn) {
+      resetBtn.addEventListener("click", () => {
+        state.groups.clear();
+        state.tokens.clear();
+        modal.querySelectorAll('input[type="checkbox"]').forEach((cb) => setChipChecked(cb, false));
+        updateOpenBtnLabel();
+        opts.onChange();
+      });
+    }
+
+    // positionStr(예: "FB / CDM")이 지금 선택된 필터에 하나라도 걸리면 true.
+    // 필터가 아무것도 선택 안 된 상태면(둘 다 비어있으면) 항상 true(전체 표시)
+    function matches(positionStr) {
+      if (state.groups.size === 0 && state.tokens.size === 0) return true;
+      const tokens = String(positionStr || "")
+        .split(/[,/]/)
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean);
+      if (tokens.length === 0) return false;
+      return tokens.some((t) => {
+        const group = POSITION_GROUP_BY_TOKEN[t] || null;
+        if (group && state.groups.has(group)) return true;
+        return state.tokens.has(t);
+      });
+    }
+
+    return { matches };
   }
 
   /* ------------------------------------------------------------------ */
@@ -229,7 +359,7 @@
     // 지원글 링크(스프레드시트 E열)가 있으면 그 글로, 없으면 모집 게시글로 이동
     const postLinkUrl = a.postUrl || DATA.POST_URL || "";
     return `
-    <article class="post-feed-item" style="${style}" data-name="${esc(a.name)}">
+    <article class="post-feed-item" style="${style}" data-name="${esc(a.name)}" data-position="${esc(a.position || "")}">
       <header class="post-feed-header">
         <a class="applicant-avatar post-feed-avatar" data-role="avatar" data-station="${esc(a.station)}" href="${esc(stationUrl(a.station))}" target="_blank" rel="noopener noreferrer" title="${esc(a.name)} 방송국으로 이동">${avatarInnerHTML(a)}</a>
         <span class="post-feed-name">${esc(a.name)}</span>
@@ -258,20 +388,21 @@
 
   const POST_FEED_SORTERS = {
     name: sortByName,
-    position: sortByPosition,
     likes: sortByLikes,
   };
 
-  let postFeedSortMode = "name"; // "name" | "position" | "likes"
+  let postFeedSortMode = "name"; // "name" | "likes"
   let postFeedSearchQuery = "";
+  let postFeedPositionFilterCtrl = null; // 아래(초기화 구간)에서 createPositionFilterController로 생성됨
 
   function applyPostFeedFilter() {
     const feed = document.getElementById("post-feed");
     if (!feed) return;
     const q = postFeedSearchQuery.trim().toLowerCase();
     feed.querySelectorAll(".post-feed-item").forEach((item) => {
-      const match = item.dataset.name.toLowerCase().includes(q);
-      item.style.display = match ? "" : "none";
+      const nameMatch = item.dataset.name.toLowerCase().includes(q);
+      const posMatch = !postFeedPositionFilterCtrl || postFeedPositionFilterCtrl.matches(item.dataset.position);
+      item.style.display = nameMatch && posMatch ? "" : "none";
     });
   }
 
@@ -317,14 +448,24 @@
     });
   }
 
+  // "가나다순" 버튼은 없앴고 기본 정렬 자체가 가나다순이라, 남은 정렬 버튼(UP순)은
+  // 다시 누르면 기본(가나다순)으로 돌아오는 토글로 동작한다
   document.querySelectorAll(".post-feed-sort-toolbar .sort-btn[data-sort]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      if (btn.dataset.sort === postFeedSortMode) return;
-      postFeedSortMode = btn.dataset.sort;
-      document.querySelectorAll(".post-feed-sort-toolbar .sort-btn[data-sort]").forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
+      postFeedSortMode = postFeedSortMode === btn.dataset.sort ? "name" : btn.dataset.sort;
+      document.querySelectorAll(".post-feed-sort-toolbar .sort-btn[data-sort]").forEach((b) => b.classList.toggle("active", b.dataset.sort === postFeedSortMode));
       renderPostFeed();
     });
+  });
+
+  // 포지션별 보기 필터 팝업 — 지원자 탭
+  postFeedPositionFilterCtrl = createPositionFilterController({
+    modalId: "position-filter-modal",
+    openBtnId: "post-feed-position-filter-btn",
+    closeBtnId: "position-filter-close",
+    resetBtnId: "position-filter-reset",
+    label: "포지션별 보기",
+    onChange: applyPostFeedFilter,
   });
 
   /* ------------------------------------------------------------------ */
@@ -367,31 +508,33 @@
   }
 
   const CONTROL_SORTERS = {
-    position: withLiveFirst(sortByPosition),
     name: withLiveFirst(sortByName),
   };
 
   let controlRoomData = null; // [{a, data}] — SOOP 조회 결과 캐시 (정렬 바꿀 때 재요청 안 하도록)
-  let controlSortMode = "position";
+  let controlSortMode = "name";
 
   // SOOP "EA Sports FC 26" 카테고리 번호(broad_cate_no) — 실제로 그 카테고리에서
   // 방송 중인 스트리머(김웰로/이루희 등)의 bjapi 응답을 직접 확인해서 얻은 값
   const FC26_CATE_NO = 40354;
   let controlOnlyFC26 = true; // "잔디만" 필터 — 기본값으로 켜져 있음
+  let controlPositionFilterCtrl = null; // 아래(초기화 구간)에서 createPositionFilterController로 생성됨
 
   function renderControlGrid() {
     const grid = document.getElementById("control-grid");
     if (!grid || !controlRoomData) return;
 
-    const filtered = controlOnlyFC26
-      ? controlRoomData.filter(({ data }) => data && data.broad && data.broad.broad_cate_no === FC26_CATE_NO)
-      : controlRoomData;
+    const filtered = controlRoomData.filter(({ a, data }) => {
+      if (controlOnlyFC26 && !(data && data.broad && data.broad.broad_cate_no === FC26_CATE_NO)) return false;
+      if (controlPositionFilterCtrl && !controlPositionFilterCtrl.matches(a.position)) return false;
+      return true;
+    });
 
-    const sorted = filtered.slice().sort(CONTROL_SORTERS[controlSortMode] || CONTROL_SORTERS.live);
+    const sorted = filtered.slice().sort(CONTROL_SORTERS[controlSortMode] || CONTROL_SORTERS.name);
 
     grid.innerHTML = sorted.length
       ? sorted.map(({ a }) => controlCardHTML(a)).join("")
-      : `<p class="applicant-loading">지금 EA Sports FC 26을 방송 중인 지원자가 없어요.</p>`;
+      : `<p class="applicant-loading">조건에 맞는 지원자가 없어요.</p>`;
 
     sorted.forEach(({ a, data }) => {
       const card = grid.querySelector(`.applicant-card[data-station="${cssEscape(a.station)}"]`);
@@ -462,15 +605,7 @@
     }
   }
 
-  document.querySelectorAll(".control-toolbar .sort-btn[data-sort]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      if (btn.dataset.sort === controlSortMode) return;
-      controlSortMode = btn.dataset.sort;
-      document.querySelectorAll(".control-toolbar .sort-btn[data-sort]").forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      renderControlGrid();
-    });
-  });
+  // "가나다순" 버튼은 없앴다 — 기본 정렬 자체가 가나다순이라 별도 버튼 없이 항상 그 순서로 보임
 
   const controlOnlyFC26Btn = document.getElementById("control-only-fc26");
   if (controlOnlyFC26Btn) {
@@ -480,6 +615,16 @@
       renderControlGrid();
     });
   }
+
+  // 포지션별 보기 필터 팝업 — 지통실 탭
+  controlPositionFilterCtrl = createPositionFilterController({
+    modalId: "control-position-filter-modal",
+    openBtnId: "control-position-filter-btn",
+    closeBtnId: "control-position-filter-close",
+    resetBtnId: "control-position-filter-reset",
+    label: "포지션별 보기",
+    onChange: renderControlGrid,
+  });
 
   const controlRefreshBtn = document.getElementById("control-refresh-btn");
   if (controlRefreshBtn) {
@@ -981,7 +1126,7 @@
     if (!rosterListEl || !pitchEl) return; // 전술보드 탭이 없는 페이지에서는 건너뜀
 
     let positions = {}; // name -> {x, y} (percent)
-    let rosterSortMode = "position";
+    let rosterPositionFilterCtrl = null; // 아래(초기화 구간)에서 createPositionFilterController로 생성됨
 
     /* -------------------------------------------------------------- */
     /* 직접 추가한 선수 — 지원자 명단에 없는 이름을 사진(천치원 로고)만       */
@@ -1301,6 +1446,7 @@
       const chip = document.createElement("div");
       chip.className = "roster-chip" + (positions[name] ? " placed" : "") + (applicant.custom ? " roster-chip--custom" : "");
       chip.dataset.name = name;
+      chip.dataset.ownTokens = (bucket.ownTokens || []).join(",");
       chip.title = name;
       const posColorVar = `var(--pos-${bucket.group || "none"})`;
       chip.style.setProperty("--pos-color", posColorVar);
@@ -1364,18 +1510,7 @@
       }
 
       const customEntries = toEntries(customOnes).sort((a, b) => sortByName(a.applicant, b.applicant));
-      const normalEntries = toEntries(normalOnes);
-
-      if (rosterSortMode === "position") {
-        normalEntries.sort((a, b) => {
-          const ix = a.bucket.group ? POSITION_GROUP_ORDER.indexOf(a.bucket.group) : POSITION_GROUP_ORDER.length;
-          const iy = b.bucket.group ? POSITION_GROUP_ORDER.indexOf(b.bucket.group) : POSITION_GROUP_ORDER.length;
-          if (ix !== iy) return ix - iy;
-          return sortByName(a.applicant, b.applicant);
-        });
-      } else {
-        normalEntries.sort((a, b) => sortByName(a.applicant, b.applicant));
-      }
+      const normalEntries = toEntries(normalOnes).sort((a, b) => sortByName(a.applicant, b.applicant));
 
       // 직접 추가한 선수는 정렬 기준과 무관하게 항상 명단 맨 위에 모아둔다
       const entries = customEntries.concat(normalEntries);
@@ -1396,8 +1531,10 @@
     function filterRoster() {
       const q = rosterSearchEl.value.trim().toLowerCase();
       rosterListEl.querySelectorAll(".roster-chip").forEach((chip) => {
-        const match = chip.dataset.name.toLowerCase().includes(q);
-        chip.style.display = match ? "" : "none";
+        const nameMatch = chip.dataset.name.toLowerCase().includes(q);
+        // 이 칩 자신의 포지션(다른 그룹 표기 안 섞은 own 토큰들)만 필터 대상으로 검사
+        const posMatch = !rosterPositionFilterCtrl || rosterPositionFilterCtrl.matches(chip.dataset.ownTokens || "");
+        chip.style.display = nameMatch && posMatch ? "" : "none";
       });
     }
 
@@ -1847,14 +1984,16 @@
       });
     }
 
-    document.querySelectorAll(".roster-sort-btn[data-sort]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        if (btn.dataset.sort === rosterSortMode) return;
-        rosterSortMode = btn.dataset.sort;
-        document.querySelectorAll(".roster-sort-btn[data-sort]").forEach((b) => b.classList.remove("active"));
-        btn.classList.add("active");
-        renderRoster(); // 그라운드에 놓인 배치는 그대로 두고 명단 목록 순서만 바뀜
-      });
+    // "가나다순" 버튼은 없앴다 — 기본 정렬 자체가 가나다순이라 별도 버튼 없이 항상 그 순서로 보임
+
+    // 포지션별 보기 필터 팝업 — 전술보드 명단
+    rosterPositionFilterCtrl = createPositionFilterController({
+      modalId: "roster-position-filter-modal",
+      openBtnId: "roster-position-filter-btn",
+      closeBtnId: "roster-position-filter-close",
+      resetBtnId: "roster-position-filter-reset",
+      label: "포지션별 보기",
+      onChange: filterRoster,
     });
 
     btnClear.addEventListener("click", () => {
