@@ -164,6 +164,7 @@
           postText: a.postText ? String(a.postText) : "",
           position: a.position ? String(a.position) : "",
           photo: a.photo ? String(a.photo) : "",
+          postUrl: a.postUrl ? String(a.postUrl) : "",
         }));
     } catch (e) {
       return null;
@@ -204,20 +205,59 @@
   /* 지원자 탭 — 지원글을 쭉 모아보는 피드                                    */
   /* 글 자체는 네트워크 요청 없이 즉시 뜨고, 방송국 프로필 사진만 지통실처럼      */
   /* SOOP에서 비동기로 불러와 채운다                                        */
+  /* 기본은 카드가 접혀서 미리보기 한 줄만 보이고, 눌러야 전체 글이 펼쳐진다      */
   /* ------------------------------------------------------------------ */
+  function postFeedPreviewText(postText) {
+    const flat = postText.trim().replace(/\s+/g, " ");
+    const MAX = 70;
+    return flat.length > MAX ? flat.slice(0, MAX) + "…" : flat;
+  }
+
   function postFeedItemHTML(a) {
     const style = positionColorStyle(a.position);
-    const text = a.postText && a.postText.trim() ? esc(a.postText) : "(지원글이 아직 없어요)";
+    const hasText = !!(a.postText && a.postText.trim());
+    const text = hasText ? esc(a.postText) : "(지원글이 아직 없어요)";
+    const preview = hasText ? esc(postFeedPreviewText(a.postText)) : "(지원글이 아직 없어요)";
+    // 지원글 링크(스프레드시트 E열)가 있으면 그 글로, 없으면 모집 게시글로 이동
+    const postLinkUrl = a.postUrl || DATA.POST_URL || "";
     return `
-    <article class="post-feed-item" style="${style}">
+    <article class="post-feed-item" style="${style}" data-name="${esc(a.name)}">
       <header class="post-feed-header">
-        <div class="applicant-avatar post-feed-avatar" data-role="avatar" data-station="${esc(a.station)}">${avatarInnerHTML(a)}</div>
+        <a class="applicant-avatar post-feed-avatar" data-role="avatar" data-station="${esc(a.station)}" href="${esc(stationUrl(a.station))}" target="_blank" rel="noopener noreferrer" title="${esc(a.name)} 방송국으로 이동">${avatarInnerHTML(a)}</a>
         <span class="post-feed-name">${esc(a.name)}</span>
         ${positionBadgeHTML(a.position)}
-        <a class="post-feed-station" href="${esc(stationUrl(a.station))}" target="_blank" rel="noopener noreferrer">@${esc(a.station)} ↗</a>
+        ${postLinkUrl ? `<a class="post-feed-postlink" href="${esc(postLinkUrl)}" target="_blank" rel="noopener noreferrer">지원글 보기 ↗</a>` : ""}
+        <button class="post-feed-toggle" type="button" aria-expanded="false">더보기 ▾</button>
       </header>
-      <div class="post-feed-text">${text}</div>
+      <p class="post-feed-preview">${preview}</p>
+      <div class="post-feed-text" hidden>${text}</div>
     </article>`;
+  }
+
+  function togglePostFeedItem(item) {
+    const expanded = item.classList.toggle("expanded");
+    const preview = item.querySelector(".post-feed-preview");
+    const text = item.querySelector(".post-feed-text");
+    const btn = item.querySelector(".post-feed-toggle");
+    if (preview) preview.hidden = expanded;
+    if (text) text.hidden = !expanded;
+    if (btn) {
+      btn.setAttribute("aria-expanded", String(expanded));
+      btn.textContent = expanded ? "접기 ▴" : "더보기 ▾";
+    }
+  }
+
+  let postFeedSortMode = "name"; // "name" | "position"
+  let postFeedSearchQuery = "";
+
+  function applyPostFeedFilter() {
+    const feed = document.getElementById("post-feed");
+    if (!feed) return;
+    const q = postFeedSearchQuery.trim().toLowerCase();
+    feed.querySelectorAll(".post-feed-item").forEach((item) => {
+      const match = item.dataset.name.toLowerCase().includes(q);
+      item.style.display = match ? "" : "none";
+    });
   }
 
   function renderPostFeed() {
@@ -225,9 +265,11 @@
     const countEl = document.getElementById("post-feed-count");
     if (!feed) return;
 
-    const sorted = DATA.APPLICANTS.slice().sort((a, b) => a.name.localeCompare(b.name, "ko"));
+    const comparator = postFeedSortMode === "position" ? sortByPosition : sortByName;
+    const sorted = DATA.APPLICANTS.slice().sort(comparator);
     feed.innerHTML = sorted.map(postFeedItemHTML).join("");
     if (countEl) countEl.textContent = `총 ${DATA.APPLICANTS.length}명 지원`;
+    applyPostFeedFilter();
 
     sorted.forEach((a) => {
       if (a.photo) return; // 시트에 사진이 직접 지정돼 있으면 이미 채워져 있으니 건너뜀
@@ -238,6 +280,37 @@
       });
     });
   }
+
+  // 카드 접기/펼치기 — 이벤트 위임으로 한 번만 걸어두면 정렬/필터로 다시
+  // 그려져도(innerHTML 교체) 계속 동작한다
+  const postFeedEl = document.getElementById("post-feed");
+  if (postFeedEl) {
+    postFeedEl.addEventListener("click", (e) => {
+      if (e.target.closest("a")) return; // 프로필 사진(방송국)·지원글 링크는 그대로 새 탭으로 이동
+      const header = e.target.closest(".post-feed-header");
+      if (!header) return;
+      const item = header.closest(".post-feed-item");
+      if (item) togglePostFeedItem(item);
+    });
+  }
+
+  const postFeedSearchEl = document.getElementById("post-feed-search");
+  if (postFeedSearchEl) {
+    postFeedSearchEl.addEventListener("input", () => {
+      postFeedSearchQuery = postFeedSearchEl.value;
+      applyPostFeedFilter();
+    });
+  }
+
+  document.querySelectorAll(".post-feed-sort-toolbar .sort-btn[data-sort]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.dataset.sort === postFeedSortMode) return;
+      postFeedSortMode = btn.dataset.sort;
+      document.querySelectorAll(".post-feed-sort-toolbar .sort-btn[data-sort]").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      renderPostFeed();
+    });
+  });
 
   /* ------------------------------------------------------------------ */
   /* 지통실 탭 — SOOP 실시간 방송 현황판 (사진/썸네일/방송중 여부 + 정렬)       */

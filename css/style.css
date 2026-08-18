@@ -350,6 +350,35 @@ main {
 /* ---------------------------------------------------------------- */
 /* 지원자 — 지원글 피드                                                  */
 /* ---------------------------------------------------------------- */
+.post-feed-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.post-feed-search {
+  flex: 1 1 220px;
+  min-width: 160px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--fc-panel-border);
+  background: var(--fc-bg2);
+  color: var(--fc-text);
+  font-size: 0.85rem;
+}
+
+.post-feed-search:focus {
+  outline: none;
+  border-color: var(--fc-green-dim);
+}
+
+.post-feed-sort-toolbar {
+  display: flex;
+  gap: 8px;
+}
+
 .post-feed {
   display: flex;
   flex-direction: column;
@@ -368,6 +397,10 @@ main {
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
+  cursor: pointer;
+}
+
+.post-feed-item.expanded .post-feed-header {
   margin-bottom: 10px;
 }
 
@@ -376,15 +409,55 @@ main {
   font-size: 1.02rem;
 }
 
-.post-feed-station {
+/* 지원글로 이동하는 버튼 — 스프레드시트 E열에 지원글 링크가 있으면 그 글로,
+   없으면 모집 게시글로 이동한다 */
+.post-feed-postlink {
   margin-left: auto;
-  font-size: 0.78rem;
-  font-weight: 700;
+  background: rgba(83,247,186,0.1);
+  border: 1px solid rgba(83,247,186,0.3);
   color: var(--fc-green);
+  font-weight: 700;
+  font-size: 0.76rem;
+  padding: 5px 12px;
+  border-radius: 999px;
   text-decoration: none;
+  transition: all 0.15s ease;
 }
 
-.post-feed-station:hover { text-decoration: underline; }
+.post-feed-postlink:hover {
+  background: rgba(83,247,186,0.18);
+}
+
+.post-feed-postlink:hover { color: var(--fc-text); text-decoration: underline; }
+
+.post-feed-toggle {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid var(--fc-panel-border);
+  color: var(--fc-text-dim);
+  font-weight: 700;
+  font-size: 0.72rem;
+  padding: 5px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.post-feed-toggle:hover {
+  color: var(--fc-text);
+  border-color: var(--fc-green-dim);
+}
+
+/* 접힌 상태에서 보이는 한 줄 미리보기 */
+.post-feed-preview {
+  margin: 0;
+  color: var(--fc-text-dim);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .post-feed-text {
   white-space: pre-wrap;
@@ -480,6 +553,16 @@ main {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* 지원자 탭 프로필 사진 — 클릭하면 방송국으로 이동하는 링크라 살짝 hover 표시를 준다 */
+.post-feed-avatar {
+  text-decoration: none;
+  transition: border-color 0.15s ease;
+}
+
+.post-feed-avatar:hover {
+  border-color: var(--fc-green);
 }
 
 .applicant-avatar img {
