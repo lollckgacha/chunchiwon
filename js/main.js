@@ -156,14 +156,14 @@
         const g = POSITION_GROUP_BY_TOKEN[t] || null;
         (g === groupVal ? own : rest).push(t);
       });
-      // ownTokens: 이 묶음 자신의 그룹에 속하는 표기만 — 포지션별 보기 필터에서
+      // ownTokens: 이 묶음 자신의 그룹에 속하는 표기만 — 포지션별 필터에서
       // "이 배지가 그 포지션에 해당하는지"를 판단할 때 씀 (label과 달리 다른 그룹 표기는 안 섞임)
       return { group: groupVal, label: own.concat(rest).join(" / "), ownTokens: own };
     });
   }
 
   /* ------------------------------------------------------------------ */
-  /* 포지션별 보기 필터 팝업 — 지원자 / 지통실 / 전술보드 명단에서 공용으로 씀     */
+  /* 포지션별 필터 팝업 — 지원자 / 지통실 / 전술보드 명단에서 공용으로 씀     */
   /* "OO 전체"를 체크하면 그 그룹의 모든 표기가, 세부 칩만 체크하면 그 표기만       */
   /* 대상이 된다. 둘은 서로 자동으로 맞춰진다("OO 전체" 체크 시 세부 칩도 전부      */
   /* 체크되고, 세부 칩을 전부 체크하면 "OO 전체"도 자동으로 체크됨)               */
@@ -458,13 +458,13 @@
     });
   });
 
-  // 포지션별 보기 필터 팝업 — 지원자 탭
+  // 포지션별 필터 팝업 — 지원자 탭
   postFeedPositionFilterCtrl = createPositionFilterController({
     modalId: "position-filter-modal",
     openBtnId: "post-feed-position-filter-btn",
     closeBtnId: "position-filter-close",
     resetBtnId: "position-filter-reset",
-    label: "포지션별 보기",
+    label: "포지션별 필터",
     onChange: applyPostFeedFilter,
   });
 
@@ -616,13 +616,13 @@
     });
   }
 
-  // 포지션별 보기 필터 팝업 — 지통실 탭
+  // 포지션별 필터 팝업 — 지통실 탭
   controlPositionFilterCtrl = createPositionFilterController({
     modalId: "control-position-filter-modal",
     openBtnId: "control-position-filter-btn",
     closeBtnId: "control-position-filter-close",
     resetBtnId: "control-position-filter-reset",
-    label: "포지션별 보기",
+    label: "포지션별 필터",
     onChange: renderControlGrid,
   });
 
@@ -1986,13 +1986,13 @@
 
     // "가나다순" 버튼은 없앴다 — 기본 정렬 자체가 가나다순이라 별도 버튼 없이 항상 그 순서로 보임
 
-    // 포지션별 보기 필터 팝업 — 전술보드 명단
+    // 포지션별 필터 팝업 — 전술보드 명단
     rosterPositionFilterCtrl = createPositionFilterController({
       modalId: "roster-position-filter-modal",
       openBtnId: "roster-position-filter-btn",
       closeBtnId: "roster-position-filter-close",
       resetBtnId: "roster-position-filter-reset",
-      label: "포지션별 보기",
+      label: "포지션별 필터",
       onChange: filterRoster,
     });
 
