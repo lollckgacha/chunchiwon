@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>LCK DRAFT</title>
+    <script src="players.js"></script>
+    <style>
+        :root {
+            --bg-dark: #020508;
+            --overlay-bg: rgba(0, 0, 0, 0.95);
+            --normal-color: #87CEEB;
+            --rare-color: #A330C9; /* 레어 등급: 보라색 */
+            --special-color: #FF4444;
+            --legend-color: #FFD700;
+            --accent-gold: #c8aa6e;
+            --card-clip-path: polygon(10% 0%, 90% 0%, 100% 10%, 100% 85%, 50% 100%, 0% 85%, 0% 10%);
+            --border-width: 3px;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: white;
+            font-family: 'Malgun Gothic', sans-serif;
+            margin: 0;
+            overflow-x: hidden; 
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        .view-section { 
+            display: none; 
+            padding: 40px 20px; 
+            flex-direction: column; 
+            align-items: center; 
+            width: 100%; 
+            box-sizing: border-box; 
+            min-height: 100vh;
+            padding-bottom: 150px; 
+        }
+        .view-section.active { display: flex; }
+
+        /* --- 메뉴 및 탭 버튼 --- */
+        .menu-btn, .tab-btn { padding: var(--border-width); background: var(--accent-gold); clip-path: var(--card-clip-path); transition: 0.3s; cursor: pointer; }
+        .menu-btn { width: 250px; height: 350px; margin: 10px; }
+        .tab-btn { width: 220px; height: 60px; margin: 0 10px; }
+        
+        .btn-inner { width: 100%; height: 100%; background: #1a2438; clip-path: var(--card-clip-path); display: flex; flex-direction: column; align-items: center; justify-content: center; transition: 0.3s; }
+        .menu-btn:hover, .tab-btn:hover { transform: translateY(-10px); }
+        .menu-btn:hover .btn-inner, .tab-btn:hover .btn-inner { background: var(--accent-gold); }
+        .menu-btn:hover h2, .tab-btn:hover span { color: black; }
+        h2, span { color: var(--accent-gold); font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin: 0; pointer-events: none; }
+
+        /* 필터 및 검색창 스타일 */
+        .filter-container { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center; background: rgba(26, 36, 56, 0.5); padding: 15px; border-radius: 10px; }
+        .filter-container select, .filter-container input { background: #1a2438; color: var(--accent-gold); border: 1px solid var(--accent-gold); padding: 8px 12px; cursor: pointer; font-weight: bold; outline: none; }
+        .filter-container input::placeholder { color: rgba(200, 170, 110, 0.5); }
+
+        /* --- 카드 디자인 --- */
+        .card { width: 160px; height: 240px; position: relative; transition: 0.3s; background-color: #333; padding: var(--border-width); box-sizing: border-box; clip-path: var(--card-clip-path); flex-shrink: 0; }
+        .card-inner { 
+            width: 100%; height: 100%; background: #0a1428; clip-path: var(--card-clip-path); 
+            position: relative; z-index: 1; overflow: hidden;
+            display: flex; align-items: center; justify-content: center; 
+            font-weight: 900; font-size: 20px; color: #ffffff; 
+            text-shadow: 0 0 5px rgba(0,0,0,0.8);
+        }
+        .card.obtained { cursor: pointer; }
+        .card.obtained:hover { transform: scale(1.05); z-index: 10; }
+
+        .p-year { position: absolute; font-weight: bold; color: white; font-style: italic; top: 12px; left: 12px; font-size: 13px; }
+        .p-pos { position: absolute; font-weight: 900; top: 12px; right: 12px; font-size: 13px; color: #ffffff; text-shadow: 1px 1px 2px rgba(0,0,0,0.8); }
+        .p-photo { position: absolute; width: 100%; top: 40px; height: 110px; display: flex; justify-content: center; align-items: center; }
+        .p-photo img { max-width: 90%; max-height: 100%; object-fit: contain; }
+        .p-info-box { position: absolute; width: 100%; bottom: 15px; text-align: center; display: flex; flex-direction: column; align-items: center; }
+        .p-name { font-weight: bold; font-size: 14px; margin-bottom: 4px; color: #f0e6d2; }
+        .p-team-box { height: 30px; width: 80px; display: flex; justify-content: center; align-items: center; }
+        .p-team-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+        .grade-normal { background-color: var(--normal-color) !important; }
+        .grade-rare { background-color: var(--rare-color) !important; box-shadow: 0 0 15px rgba(163, 48, 201, 0.4); }
+        .grade-special { background-color: var(--special-color) !important; box-shadow: 0 0 15px rgba(255, 68, 68, 0.4); }
+        .grade-legend { background-color: var(--legend-color) !important; box-shadow: 0 0 25px rgba(255, 215, 0, 0.6); animation: pulse-gold 2s infinite; }
+        @keyframes pulse-gold { 0%, 100% { opacity: 1; } 50% { opacity: 0.8; } }
+
+        .unobtained { background-color: #ffffff !important; box-shadow: none !important; pointer-events: none; opacity: 0.5; }
+        .unobtained .card-inner { background-color: #000000 !important; }
+        .q-mark { font-size: 80px; color: #ffffff; font-weight: bold; text-shadow: 0 0 10px rgba(255,255,255,0.5); }
+
+        .new-badge { position: absolute; top: 10px; right: 10px; background: #FFD700; color: black; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 3px; z-index: 10; animation: flash 1.5s infinite; }
+        @keyframes flash { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+        .roster-slot-container { display: flex; flex-direction: column; align-items: center; gap: 15px; }
+        .pos-logo { width: 45px; height: 45px; object-fit: contain; filter: drop-shadow(0 0 5px var(--accent-gold)); }
+
+        .bookshelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 25px; width: 100%; max-width: 1100px; padding: 20px; }
+        .team-book { height: 260px; border-left: 12px solid rgba(0,0,0,0.4); border-radius: 4px 12px 12px 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: 0.3s; box-shadow: 8px 8px 15px rgba(0,0,0,0.5); }
+        .team-book img { width: 75px; height: 75px; object-fit: contain; margin-bottom: 15px; pointer-events: none; }
+
+        #pack-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--overlay-bg); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 200; backdrop-filter: blur(15px); }
+        .popup-card { width: 340px; height: 500px; padding: 4px; clip-path: var(--card-clip-path); transform: scale(0.5); opacity: 0; transition: 0.6s; }
+        .popup-card.show { transform: scale(1); opacity: 1; }
+        .popup-card .card-inner { background: linear-gradient(135deg, #1a2438 0%, #050a12 100%); }
+        .reveal-item { opacity: 0; transform: translateY(20px); transition: 0.5s; }
+        .reveal-item.active { opacity: 1; transform: translateY(0); }
+
+        .nav-btns { position: sticky; top: 0; background: var(--bg-dark); padding: 15px; z-index: 150; display: none; gap: 10px; justify-content: center; border-bottom: 1px solid #1e2328; }
+        button { padding: 10px 20px; background: #1e2328; color: var(--accent-gold); border: 1px solid var(--accent-gold); cursor: pointer; font-weight: bold; }
+        button:disabled { opacity: 0.3; cursor: not-allowed; } 
+        .reset-btn { background: #311; color: #f44; border-color: #f44; }
+        .all-btn { background: #1a2438; color: var(--accent-gold); border-color: var(--accent-gold); margin-right: 10px; }
+        .clear-all-btn { background: #221111; color: #ff4444; border: 2px solid #ff4444; font-size: 14px; margin-top: 40px; padding: 12px 25px; border-radius: 5px; cursor: pointer; transition: 0.3s; font-weight: bold; }
+        .clear-all-btn:hover { background: #ff4444; color: white; }
+
+        .notice-box { margin-top: 50px; padding: 25px; width: 100%; max-width: 700px; background: rgba(26, 36, 56, 0.6); border-top: 2px solid var(--accent-gold); border-bottom: 2px solid var(--accent-gold); text-align: left; box-sizing: border-box; }
+        .notice-box h3 { font-size: 18px; color: var(--accent-gold); margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
+        .notice-box h3::before { content: "●"; font-size: 12px; }
+        .notice-box p { font-size: 14px; line-height: 1.8; color: #f0e6d2; margin: 0; white-space: pre-wrap; }
+
+        #selection-view { display: none; width: 100%; flex-direction: column; align-items: center; }
+        #selection-grid, #collection-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 20px; width: 100%; max-width: 1100px; margin-top: 30px; }
+        .pagination-controls { display: flex; align-items: center; gap: 20px; margin-top: 30px; }
+        .page-info { font-weight: bold; color: var(--accent-gold); }
+
+        footer { position: fixed; bottom: 0; width: 100%; padding: 15px 0; background: rgba(2, 5, 8, 0.9); color: #ffffff; font-size: 14px; font-weight: 800; text-align: center; z-index: 100; border-top: 1px solid #1a2438; }
+        #draft-board { display: flex; gap: 20px; margin-top: 40px; align-items: flex-start; max-width: 100%; overflow-x: auto; padding: 30px; background: var(--bg-dark); }
+        #roster-slots-container { padding: 30px; background: var(--bg-dark); }
+        #roster-slots { display:flex; flex-wrap: wrap; justify-content: center; gap:20px; }
+    </style>
+</head>
+<body>
+
+    <div class="nav-btns" id="nav-btns">
+        <button onclick="changeView('view-home')">홈</button>
+        <button onclick="changeView('view-draft')">선수 뽑기</button>
+        <button onclick="changeView('view-collection')">선수 도감</button>
+        <button onclick="changeView('view-roster')">나만의 로스터</button>
+    </div>
+
+    <section id="view-home" class="view-section active">
+        <img src="images/logos/lck.svg" style="height:60px; margin-bottom:20px; filter: drop-shadow(0 0 10px #c8aa6e);">
+        <h1 style="font-size: 45px; color: var(--accent-gold); letter-spacing: 6px; margin:0; text-align: center;">LCK DRAFT</h1>
+        <div class="main-menu" style="display:flex; flex-wrap:wrap; justify-content:center; margin-top:40px;">
+            <div class="menu-btn" onclick="changeView('view-draft')"><div class="btn-inner"><h2>선수 뽑기</h2></div></div>
+            <div class="menu-btn" onclick="changeView('view-collection')"><div class="btn-inner"><h2>선수 도감</h2></div></div>
+            <div class="menu-btn" onclick="changeView('view-roster')"><div class="btn-inner"><h2>나만의 로스터</h2></div></div>
+        </div>
+        <button class="clear-all-btn" onclick="clearFullData()">전체 도감 데이터 초기화</button>
+        <div class="notice-box">
+            <h3>1월 16일 패치노트</h3>
+            <p>• 리그 우승 시즌 카드인 레어 등급 카드가 추가되었습니다.
+• 현재 LCK 참가팀들의 과거 시즌 선수들 카드가 추가되었습니다.
+• 과거 LCK 참가팀들의 일부 시즌 선수들 카드가 추가되었습니다.
+• 사진이 수록되어있지 않은 선수들은 순차적 업데이트 예정입니다.
+• 뽑기 확률에 변동이 있습니다.
+• 선수 닉네임으로 검색기능이 추가되었습니다.</p>
+        </div>
+    </section>
+
+    <section id="view-draft" class="view-section">
+        <h1 style="color: var(--accent-gold);">선수 뽑기</h1>
+        <div id="draft-board"></div>
+        <div style="display:flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top:30px;">
+            <button id="all-pack-btn" class="all-btn" onclick="openAllPacks()">전체 뽑기 (1명 레어 등급 이상 확정)</button>
+            <button class="reset-btn" onclick="resetDraftSession()">한번 더 뽑기</button>
+        </div>
+        <div style="margin-top:25px; padding: 15px; background: rgba(26, 36, 56, 0.4); border-radius: 10px; border: 1px solid #1e2328; width: 100%; max-width: 600px;">
+            <div style="margin-bottom: 10px; font-size: 14px; color: #888; text-align: center;">등급별 획득 확률 안내</div>
+            <div style="font-weight:bold; text-align: center; letter-spacing: 1px; display: flex; justify-content: space-around; flex-wrap: wrap; gap: 10px;">
+                <span style="color: var(--normal-color);">NORMAL 70%</span> 
+                <span style="color: var(--rare-color);">RARE 15%</span> 
+                <span style="color: var(--special-color);">SPECIAL 10%</span> 
+                <span style="color: var(--legend-color);">LEGEND 5%</span>
+            </div>
+        </div>
+    </section>
+
+    <section id="view-collection" class="view-section">
+        <h1 style="color: var(--accent-gold);">선수 도감</h1>
+        <div style="display:flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-bottom:30px;">
+            <div class="tab-btn active-tab" id="tab-active" onclick="switchCollectionPage('active')"><div class="btn-inner"><span>현재 팀 (PAGE 1)</span></div></div>
+            <div class="tab-btn" id="tab-past" onclick="switchCollectionPage('past')"><div class="btn-inner"><span>과거 팀 (PAGE 2)</span></div></div>
+        </div>
+        <div id="team-bookshelf" class="bookshelf"></div>
+        
+        <div id="team-detail" style="display:none; width: 100%; max-width:1100px; flex-direction: column; align-items: center;">
+            <div style="width:100%; display:flex; justify-content: flex-start; margin-bottom: 20px;">
+                <button onclick="backToBookshelf()">← 팀 목록</button>
+            </div>
+            
+            <div class="filter-container">
+                <select id="col-filter-grade" onchange="renderCollectionDetail(0)">
+                    <option value="all">전체 등급</option>
+                    <option value="legend">LEGEND</option>
+                    <option value="special">SPECIAL</option>
+                    <option value="rare">RARE</option>
+                    <option value="normal">NORMAL</option>
+                </select>
+                <select id="col-filter-year" onchange="renderCollectionDetail(0)">
+                    <option value="all">전체 연도</option>
+                </select>
+                <select id="col-filter-pos" onchange="renderCollectionDetail(0)">
+                    <option value="all">전체 포지션</option>
+                    <option value="top">TOP</option>
+                    <option value="jgl">JGL</option>
+                    <option value="mid">MID</option>
+                    <option value="adc">ADC</option>
+                    <option value="sup">SUP</option>
+                </select>
+                <input type="text" id="col-search-name" placeholder="닉네임 검색..." onkeyup="renderCollectionDetail(0)">
+            </div>
+
+            <div id="collection-grid"></div>
+
+            <div class="pagination-controls">
+                <button onclick="changeCollectionPage(-1)">이전</button>
+                <span class="page-info" id="col-page-info">1 / 1</span>
+                <button onclick="changeCollectionPage(1)">다음</button>
+            </div>
+        </div>
+    </section>
+
+    <section id="view-roster" class="view-section">
+        <h1 style="color: var(--accent-gold);">나만의 로스터</h1>
+        <div id="roster-slots-container">
+            <div id="roster-slots"></div>
+        </div>
+        <div style="margin-top:30px; display:flex; gap:10px;">
+            <button class="reset-btn" onclick="initRoster()">로스터 비우기</button>
+        </div>
+        <div id="selection-view">
+            <h2 style="margin-top:50px; color:var(--accent-gold);" id="selection-title">선수 선택</h2>
+            
+            <div class="filter-container">
+                <select id="ros-filter-grade" onchange="renderSelectionPage(0)">
+                    <option value="all">전체 등급</option>
+                    <option value="legend">LEGEND</option>
+                    <option value="special">SPECIAL</option>
+                    <option value="rare">RARE</option>
+                    <option value="normal">NORMAL</option>
+                </select>
+                <select id="ros-filter-year" onchange="renderSelectionPage(0)">
+                    <option value="all">전체 연도</option>
+                </select>
+                <select id="ros-filter-pos" onchange="renderSelectionPage(0)">
+                    <option value="all">전체 포지션</option>
+                    <option value="top">TOP</option>
+                    <option value="jgl">JGL</option>
+                    <option value="mid">MID</option>
+                    <option value="adc">ADC</option>
+                    <option value="sup">SUP</option>
+                </select>
+                <input type="text" id="ros-search-name" placeholder="닉네임 검색..." onkeyup="renderSelectionPage(0)">
+            </div>
+
+            <div id="selection-grid"></div>
+            <div class="pagination-controls" id="pagination-controls">
+                <button onclick="changeSelectionPage(-1)">이전</button>
+                <span class="page-info" id="page-info">1 / 1</span>
+                <button onclick="changeSelectionPage(1)">다음</button>
+            </div>
+            <button onclick="hideSelection()" style="margin-top:30px;">취소</button>
+        </div>
+    </section>
+
+    <div id="pack-overlay">
+        <div id="popup-card" class="popup-card card">
+            <div class="card-inner">
+                <div class="p-year reveal-item" id="p-year" style="position:absolute; top:35px; left:30px; font-size:40px; font-weight:bold;"></div>
+                <div class="p-pos reveal-item" id="p-pos" style="position:absolute; top:35px; right:30px; font-size:28px; font-weight:900;"></div>
+                <div class="p-photo reveal-item" id="p-photo-container" style="position:absolute; top:80px; width:100%; height:260px; display:flex; justify-content:center;"><img id="p-img" src="" style="max-height:100%; object-fit:contain;"></div>
+                <div class="p-info-box" style="position:absolute; bottom:40px; width:100%; text-align:center;">
+                    <div class="p-name reveal-item" id="p-name" style="font-size:32px; font-weight:bold; margin-bottom:10px;"></div>
+                    <div class="p-team-box reveal-item" id="p-team" style="height:60px; display:flex; justify-content:center;"><img id="p-team-img" src="" style="max-height:100%;"></div>
+                </div>
+            </div>
+        </div>
+        <div style="margin-top:40px; display:flex; gap:20px; z-index:201;">
+            <button id="skip-btn" onclick="processSkip()">SKIP</button>
+            <button id="close-btn" style="display:none; background:white; color:black; border:none;" onclick="handleClosePopup()">확인</button>
+        </div>
+    </div>
+
+    <footer>CONTACT : lollckgacha@gmail.com</footer>
+
+    <script>
+        let myCards = JSON.parse(localStorage.getItem('lck_collection') || '[]');
+        let draftedStatus = { top: false, jgl: false, mid: false, adc: false, sup: false };
+        let currentCollectionPage = 'active', selectingSlot = null, isSkip = false, closePopupResolver = null;
+        let currentSelectionPage = 0, currentCollectionDetailPage = 0, playersPerPage = 12;
+        let currentSelectedTeam = "";
+
+        const CONFIG_ACTIVE_TEAMS = ['GEN', 'HLE', 'KT', 'T1', 'DK', 'BFX', 'NS', 'BRO', 'DRX', 'DNS'];
+        const CONFIG_PAST_TEAMS = ['LCK', 'BBQ', 'CJE', 'EEW', 'GRF', 'JAG', 'MVP', 'SBK', 'SP', 'LOL'];
+        const CONFIG_LOGOS = { 'LCK': 'images/logos/lck.svg', 'BBQ': 'images/logos/bbq.webp', 'BFX': 'images/logos/bfx.svg', 'BRO': 'images/logos/bro.svg', 'CJE': 'images/logos/cje.svg', 'DK': 'images/logos/dk.svg', 'DNS': 'images/logos/dns.svg', 'DRX': 'images/logos/drx.svg', 'EEW': 'images/logos/eew.webp', 'GEN': 'images/logos/gen.webp', 'GRF': 'images/logos/grf.webp', 'HLE': 'images/logos/hle.svg', 'JAG': 'images/logos/jag.svg', 'KT': 'images/logos/kt.svg', 'MVP': 'images/logos/mvp.webp', 'NS': 'images/logos/ns.svg', 'SBK': 'images/logos/sbk.webp', 'SP': 'images/logos/sp.webp', 'T1': 'images/logos/t1.svg', 'LOL': 'images/logos/lol.svg' };
+        const CONFIG_COLORS = { 'LCK': '#c8aa6e', 'BBQ': '#c6131a', 'BFX': '#666666', 'BRO': '#00492b', 'CJE': '#666666', 'DK': '#666666', 'DNS': '#0c50f1', 'DRX': '#1102a3', 'EEW': '#b2732d', 'GEN': '#666666', 'GRF': '#666666', 'HLE': '#ff6b01', 'JAG': '#14a73c', 'KT': '#666666', 'MVP': '#0c77ba', 'NS': '#de2027', 'SBK': '#0100ff', 'SP': '#d74646', 'T1': '#e4002b', 'LOL': '#666666' };
+        const POS_ORDER = { 'top': 1, 'jgl': 2, 'mid': 3, 'adc': 4, 'sup': 5 };
+        const GRADE_ORDER = { 'legend': 1, 'special': 2, 'rare': 3, 'normal': 4 };
+        const CONFIG_POS_LOGOS = { 'top': 'images/logos/top.svg', 'jgl': 'images/logos/jgl.svg', 'mid': 'images/logos/mid.svg', 'adc': 'images/logos/adc.svg', 'sup': 'images/logos/sup.svg' };
+
+        function getSafeLogo(n) { return CONFIG_LOGOS[n.toUpperCase().trim()] || ""; }
+        function getCardHTML(p, pos, got) {
+            if (!got) return `<div class="q-mark">?</div>`;
+            return `<div class="p-year">${p.year}</div><div class="p-pos">${pos.toUpperCase()}</div><div class="p-photo"><img src="${p.img}"></div><div class="p-info-box"><div class="p-name">${p.name}</div><div class="p-team-box"><img src="${getSafeLogo(p.team)}"></div></div>`;
+        }
+
+        function initYearFilters() {
+            const years = new Set();
+            Object.keys(playersByGrade).forEach(g => {
+                Object.keys(playersByGrade[g]).forEach(pos => {
+                    playersByGrade[g][pos].forEach(p => years.add(p.year));
+                });
+            });
+            const sortedYears = Array.from(years).sort((a, b) => a - b);
+            ['col-filter-year', 'ros-filter-year'].forEach(id => {
+                const select = document.getElementById(id);
+                if(!select) return;
+                select.innerHTML = '<option value="all">전체 연도</option>';
+                sortedYears.forEach(y => { select.innerHTML += `<option value="${y}">${y}</option>`; });
+            });
+        }
+
+        function clearFullData() { if(confirm("모든 도감 데이터를 영구 삭제하시겠습니까?")) { localStorage.removeItem('lck_collection'); myCards = []; location.reload(); } }
+        
+        function changeView(id) {
+            document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+            document.getElementById('nav-btns').style.display = (id === 'view-home') ? 'none' : 'flex';
+            if(id === 'view-draft') initDraft();
+            if(id === 'view-collection') { initYearFilters(); renderBookshelf(); }
+            if(id === 'view-roster') { initYearFilters(); initRoster(); }
+            window.scrollTo(0, 0);
+        }
+        window.onload = () => changeView('view-home');
+
+        function initDraft() {
+            const b = document.getElementById('draft-board'); b.innerHTML = '';
+            ['top','jgl','mid','adc','sup'].forEach(p => { b.innerHTML += `<div class="roster-slot-container"><img src="${CONFIG_POS_LOGOS[p]}" class="pos-logo"><div class="card" id="draft-${p}" onclick="openPack('${p}')"><div class="card-inner">${p.toUpperCase()}</div></div></div>`; });
+            checkDraftStatus();
+        }
+        function checkDraftStatus() { document.getElementById('all-pack-btn').disabled = Object.values(draftedStatus).some(v => v === true); }
+        function resetDraftSession() { draftedStatus = { top: false, jgl: false, mid: false, adc: false, sup: false }; initDraft(); }
+
+        // --- 전체 뽑기 로직 (1명 레어 이상 확정) ---
+        async function openAllPacks() {
+            let gs = []; 
+            for(let i=0; i<5; i++) { 
+                let r = Math.random()*100;
+                // 확률: Legend 5%, Special 10%, Rare 15%, Normal 70%
+                let grade = r <= 5 ? 'legend' : (r <= 15 ? 'special' : (r <= 30 ? 'rare' : 'normal'));
+                gs.push(grade);
+            }
+            // 레어 이상(Rare, Special, Legend)이 한 명도 없으면 무작위 한 명을 'rare'로 확정 보정
+            if(!gs.some(g => g === 'rare' || g === 'special' || g === 'legend')) {
+                gs[Math.floor(Math.random()*5)] = 'rare';
+            }
+            const ps = ['top','jgl','mid','adc','sup']; 
+            for(let i=0; i<5; i++) { await openPack(ps[i], gs[i]); }
+        }
+
+        async function openPack(pos, forcedG = null) {
+            if(draftedStatus[pos]) return;
+            isSkip = false;
+
+            let r = Math.random()*100;
+            let g = forcedG || (r <= 5 ? 'legend' : (r <= 15 ? 'special' : (r <= 30 ? 'rare' : 'normal')));
+            
+            // 데이터 예외 처리
+            if(!playersByGrade[g] || !playersByGrade[g][pos]) g = 'normal';
+            
+            let p = playersByGrade[g][pos][Math.floor(Math.random() * playersByGrade[g][pos].length)];
+            const id = `${p.name}_${p.year}_${p.team}`;
+            const isNew = !myCards.includes(id);
+
+            if(isNew) {
+                myCards.push(id);
+                localStorage.setItem('lck_collection', JSON.stringify(myCards));
+            }
+
+            // 노말 등급은 연출 없이 즉시 오픈
+            if (g === 'normal') {
+                updateDraftBoard(pos, g, p, isNew);
+                checkDraftStatus();
+                return Promise.resolve();
+            }
+
+            // 레어 이상은 팝업 연출
+            const popupCard = document.getElementById('popup-card');
+            const overlay = document.getElementById('pack-overlay');
+            
+            overlay.style.display = 'none'; 
+            popupCard.classList.remove('show');
+            document.querySelectorAll('.reveal-item').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById('p-img').src = ""; 
+            document.getElementById('p-year').innerText = "";
+            document.getElementById('p-pos').innerText = "";
+            document.getElementById('p-name').innerText = "";
+            document.getElementById('p-team-img').src = "";
+
+            await new Promise(res => setTimeout(res, 50));
+
+            overlay.style.display = 'flex';
+            document.getElementById('close-btn').style.display = 'none';
+            document.getElementById('skip-btn').style.display = 'block';
+
+            popupCard.className = `popup-card card grade-${g}`;
+            document.getElementById('p-img').src = p.img;
+            document.getElementById('p-year').innerText = p.year;
+            document.getElementById('p-pos').innerText = pos.toUpperCase();
+            document.getElementById('p-name').innerText = p.name;
+            document.getElementById('p-team-img').src = getSafeLogo(p.team);
+
+            await new Promise(res => setTimeout(res, 100));
+            popupCard.classList.add('show');
+
+            const steps = ['p-year', 'p-team', 'p-pos', ['p-photo-container', 'p-name']];
+            for(const s of steps) {
+                if(isSkip) break;
+                await new Promise(res => setTimeout(res, 800));
+                if(isSkip) break;
+                if(Array.isArray(s)) s.forEach(si => document.getElementById(si).classList.add('active'));
+                else document.getElementById(s).classList.add('active');
+            }
+
+            updateDraftBoard(pos, g, p, isNew);
+            checkDraftStatus();
+            document.getElementById('skip-btn').style.display = 'none';
+            document.getElementById('close-btn').style.display = 'block';
+
+            return new Promise(res => { closePopupResolver = res; });
+        }
+
+        function updateDraftBoard(pos, g, p, isNew) {
+            draftedStatus[pos] = true;
+            const card = document.getElementById(`draft-${pos}`);
+            card.className = `card locked grade-${g}`;
+            card.innerHTML = `${isNew ? '<div class="new-badge">NEW</div>' : ''}<div class="card-inner" style="display:block;">${getCardHTML(p, pos, true)}</div>`;
+        }
+
+        function handleClosePopup() { 
+            const popupCard = document.getElementById('popup-card');
+            popupCard.classList.remove('show'); 
+            document.getElementById('pack-overlay').style.display = 'none'; 
+            document.getElementById('p-img').src = ""; 
+            document.getElementById('p-team-img').src = "";
+            document.querySelectorAll('.reveal-item').forEach(el => el.classList.remove('active'));
+            if(closePopupResolver) closePopupResolver(); 
+        }
+
+        function processSkip() { isSkip = true; document.querySelectorAll('.reveal-item').forEach(el => el.classList.add('active')); document.getElementById('skip-btn').style.display = 'none'; document.getElementById('close-btn').style.display = 'block'; }
+
+        function showCollectionPopup(pName, pYear, pTeam, pPos, pGrade, pImg) {
+            isSkip = true;
+            document.getElementById('pack-overlay').style.display = 'flex';
+            document.getElementById('skip-btn').style.display = 'none';
+            document.getElementById('close-btn').style.display = 'block';
+            document.getElementById('popup-card').className = `popup-card card grade-${pGrade} show`;
+            document.getElementById('p-img').src = pImg;
+            document.getElementById('p-year').innerText = pYear;
+            document.getElementById('p-pos').innerText = pPos.toUpperCase();
+            document.getElementById('p-name').innerText = pName;
+            document.getElementById('p-team-img').src = getSafeLogo(pTeam);
+            document.querySelectorAll('.reveal-item').forEach(el => el.classList.add('active'));
+        }
+
+        function switchCollectionPage(p) { currentCollectionPage = p; document.getElementById('tab-active').classList.toggle('active-tab', p === 'active'); document.getElementById('tab-past').classList.toggle('active-tab', p === 'past'); renderBookshelf(); }
+        
+        function renderBookshelf() {
+            const s = document.getElementById('team-bookshelf'); s.style.display = 'grid'; 
+            document.getElementById('team-detail').style.display = 'none'; s.innerHTML = '';
+            const l = (currentCollectionPage === 'active') ? CONFIG_ACTIVE_TEAMS : CONFIG_PAST_TEAMS;
+            l.forEach(t => { s.innerHTML += `<div class="team-book" onclick="viewTeamDetail('${t}')" style="background-color:${CONFIG_COLORS[t] || '#2a3a5a'}"><img src="${getSafeLogo(t)}"><h3>${t}</h3></div>`; });
+        }
+
+        function viewTeamDetail(t) {
+            currentSelectedTeam = t; currentCollectionDetailPage = 0;
+            document.getElementById('team-bookshelf').style.display = 'none'; 
+            document.getElementById('team-detail').style.display = 'flex';
+            document.getElementById('col-filter-grade').value = 'all';
+            document.getElementById('col-filter-year').value = 'all';
+            document.getElementById('col-filter-pos').value = 'all';
+            document.getElementById('col-search-name').value = '';
+            renderCollectionDetail(0);
+        }
+
+        function renderCollectionDetail(pageOffset) {
+            currentCollectionDetailPage += pageOffset;
+            const grid = document.getElementById('collection-grid'); grid.innerHTML = '';
+            const t = currentSelectedTeam;
+
+            const fGrade = document.getElementById('col-filter-grade').value;
+            const fYear = document.getElementById('col-filter-year').value;
+            const fPos = document.getElementById('col-filter-pos').value;
+            const fSearch = document.getElementById('col-search-name').value.toLowerCase();
+
+            let allMatched = [];
+            Object.keys(playersByGrade).forEach(gr => {
+                if (fGrade !== 'all' && fGrade !== gr) return;
+                Object.keys(playersByGrade[gr]).forEach(po => {
+                    if (fPos !== 'all' && fPos !== po) return;
+                    playersByGrade[gr][po].forEach(p => {
+                        let teamMatch = (t === 'LCK') ? (gr === 'legend') : (gr !== 'legend' && p.team.toUpperCase() === t);
+                        let yearMatch = (fYear === 'all' || fYear == p.year);
+                        let nameMatch = (fSearch === '' || p.name.toLowerCase().includes(fSearch));
+                        if(teamMatch && yearMatch && nameMatch) { allMatched.push({...p, grade: gr, pPos: po}); }
+                    });
+                });
+            });
+
+            allMatched.sort((a, b) => GRADE_ORDER[a.grade] - GRADE_ORDER[b.grade] || POS_ORDER[a.pPos] - POS_ORDER[b.pPos] || a.year - b.year);
+            const totalPages = Math.ceil(allMatched.length / playersPerPage);
+            if (currentCollectionDetailPage < 0) currentCollectionDetailPage = 0;
+            if (currentCollectionDetailPage >= totalPages && totalPages > 0) currentCollectionDetailPage = totalPages - 1;
+
+            const start = currentCollectionDetailPage * playersPerPage;
+            allMatched.slice(start, start + playersPerPage).forEach(p => {
+                const got = myCards.includes(`${p.name}_${p.year}_${p.team}`); 
+                const cardDiv = document.createElement('div');
+                cardDiv.className = `card ${got ? 'grade-'+p.grade+' obtained' : 'unobtained'}`;
+                cardDiv.innerHTML = `<div class="card-inner" ${got ? 'style="display:block;"' : ''}>${getCardHTML(p, p.pPos, got)}</div>`;
+                if(got) cardDiv.onclick = () => showCollectionPopup(p.name, p.year, p.team, p.pPos, p.grade, p.img);
+                grid.appendChild(cardDiv);
+            });
+            document.getElementById('col-page-info').innerText = `${allMatched.length > 0 ? currentCollectionDetailPage + 1 : 0} / ${totalPages || 0}`;
+        }
+
+        function changeCollectionPage(offset) { renderCollectionDetail(offset); }
+        function backToBookshelf() { renderBookshelf(); }
+
+        function initRoster() {
+            const b = document.getElementById('roster-slots'); b.innerHTML = '';
+            ['top','jgl','mid','adc','sup'].forEach(p => { b.innerHTML += `<div class="roster-slot-container"><img src="${CONFIG_POS_LOGOS[p]}" class="pos-logo"><div class="slot card" id="slot-${p}" onclick="showRosterSelection('${p}')"><div class="card-inner">${p.toUpperCase()}</div></div></div>`; });
+            hideSelection();
+        }
+
+        function showRosterSelection(pos) {
+            selectingSlot = pos; currentSelectionPage = 0;
+            document.getElementById('ros-filter-grade').value = 'all';
+            document.getElementById('ros-filter-year').value = 'all';
+            document.getElementById('ros-filter-pos').value = pos; 
+            document.getElementById('ros-search-name').value = '';
+            document.getElementById('selection-view').style.display = 'flex'; 
+            renderSelectionPage(0);
+            document.getElementById('selection-view').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function renderSelectionPage(pageOffset) {
+            currentSelectionPage += pageOffset;
+            const grid = document.getElementById('selection-grid'); grid.innerHTML = '';
+            const fGrade = document.getElementById('ros-filter-grade').value;
+            const fYear = document.getElementById('ros-filter-year').value;
+            const fPos = document.getElementById('ros-filter-pos').value;
+            const fSearch = document.getElementById('ros-search-name').value.toLowerCase();
+
+            let filteredOwned = [];
+            Object.keys(playersByGrade).forEach(gr => {
+                if (fGrade !== 'all' && fGrade !== gr) return;
+                Object.keys(playersByGrade[gr]).forEach(po => {
+                    if (fPos !== 'all' && fPos !== po) return;
+                    playersByGrade[gr][po].forEach(p => {
+                        if (myCards.includes(`${p.name}_${p.year}_${p.team}`)) {
+                            let yearMatch = (fYear === 'all' || fYear == p.year);
+                            let nameMatch = (fSearch === '' || p.name.toLowerCase().includes(fSearch));
+                            if (yearMatch && nameMatch) { filteredOwned.push({ ...p, grade: gr, pPos: po }); }
+                        }
+                    });
+                });
+            });
+
+            filteredOwned.sort((a, b) => GRADE_ORDER[a.grade] - GRADE_ORDER[b.grade] || POS_ORDER[a.pPos] - POS_ORDER[b.pPos] || a.year - b.year);
+            const totalPages = Math.ceil(filteredOwned.length / playersPerPage);
+            if (currentSelectionPage < 0) currentSelectionPage = 0;
+            if (currentSelectionPage >= totalPages && totalPages > 0) currentSelectionPage = totalPages - 1;
+
+            const start = currentSelectionPage * playersPerPage;
+            filteredOwned.slice(start, start + playersPerPage).forEach(p => {
+                const d = document.createElement('div'); 
+                d.className = `card grade-${p.grade} clickable obtained`; 
+                d.innerHTML = `<div class="card-inner" style="display:block;">${getCardHTML(p, p.pPos, true)}</div>`;
+                d.onclick = () => { 
+                    const s = document.getElementById(`slot-${selectingSlot}`); 
+                    s.innerHTML = `<div class="card-inner" style="display:block;">${getCardHTML(p, p.pPos, true)}</div>`; 
+                    s.className = `card grade-${p.grade}`; 
+                    hideSelection(); 
+                };
+                grid.appendChild(d);
+            });
+            document.getElementById('page-info').innerText = `${filteredOwned.length > 0 ? currentSelectionPage + 1 : 0} / ${totalPages || 0}`;
+        }
+
+        function changeSelectionPage(o) { renderSelectionPage(o); }
+        function hideSelection() { document.getElementById('selection-view').style.display = 'none'; }
+    </script>
+</body>
+</html>
+

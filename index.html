@@ -23,7 +23,7 @@
     </div>
     <nav class="nav-tabs">
       <button class="nav-tab active" data-tab="tab-instructors">강사진</button>
-      <button class="nav-tab" data-tab="tab-applicants">지원자</button>
+      <button class="nav-tab" data-tab="tab-applicants">참가자</button>
       <button class="nav-tab" data-tab="tab-control">지통실</button>
       <button class="nav-tab" data-tab="tab-schedule">일정</button>
       <button class="nav-tab" data-tab="tab-board">전술보드</button>
@@ -42,11 +42,11 @@
     <div id="instructor-grid" class="instructor-grid"></div>
   </section>
 
-  <!-- ================= 지원자 (지원글 모아보기) ================= -->
+  <!-- ================= 참가자 (FC26 시리즈 카드 스타일) ================= -->
   <section id="tab-applicants" class="tab-panel">
     <div class="section-head">
-      <h2 class="section-title">지원자</h2>
-      <span class="section-sub" id="post-feed-count">0명 지원</span>
+      <h2 class="section-title">참가자</h2>
+      <span class="section-sub" id="post-feed-count">0명 참가</span>
     </div>
     <div class="post-feed-toolbar">
       <input id="post-feed-search" class="post-feed-search" type="text" placeholder="닉네임 검색..." autocomplete="off" />
@@ -58,7 +58,7 @@
     <div id="post-feed" class="post-feed"></div>
   </section>
 
-  <!-- 포지션별 필터 팝업 (지원자 탭) -->
+  <!-- 포지션별 필터 팝업 (참가자 탭) -->
   <div id="position-filter-modal" class="modal-overlay" hidden>
     <div class="modal-panel position-filter-panel" role="dialog" aria-modal="true" aria-labelledby="position-filter-title">
       <div class="modal-head">
@@ -194,7 +194,7 @@
   <section id="tab-control" class="tab-panel">
     <div class="section-head">
       <h2 class="section-title">지통실</h2>
-      <span class="section-sub" id="control-count">0명 지원</span>
+      <span class="section-sub" id="control-count">0명 참가</span>
     </div>
     <div class="control-toolbar">
       <button id="control-position-filter-btn" class="sort-btn" type="button">포지션별 필터</button>
@@ -299,10 +299,10 @@
         <p id="pitch-hint" class="pitch-hint">그라운드 안은 선발, 위아래 사이드라인 밖 어두운 공간은 벤치예요. 다시 드래그해서 옮길 수 있고, ×를 누르거나 명단 쪽으로 끌면 제거돼요.</p>
       </div>
 
-      <!-- 좌측 플로팅: 지원자 명단 -->
+      <!-- 좌측 플로팅: 참가자 명단 -->
       <aside id="roster-panel" class="roster-floating">
         <div class="floating-panel-head">
-          <h2 class="panel-title">👥 지원자 명단</h2>
+          <h2 class="panel-title">👥 참가자 명단</h2>
           <button id="roster-toggle" class="floating-toggle-btn" aria-label="명단 접기/펼치기" title="명단 접기/펼치기">‹</button>
         </div>
         <div class="floating-panel-body">

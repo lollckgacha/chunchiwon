@@ -1,7 +1,7 @@
 /* =====================================================================
  * main.js — 천치원 시즌2
  * data.js 의 window.CHEONCHIWON_DATA 를 읽어서 화면을 그립니다.
- * (강사진 렌더링 / 지원자 카드 + SOOP 실시간 정보 + Firebase 동기화 /
+ * (강사진 렌더링 / 참가자 카드 + SOOP 실시간 정보 + Firebase 동기화 /
  *  전술보드 드래그앤드롭)
  * ===================================================================== */
 
@@ -163,7 +163,7 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* 포지션별 필터 팝업 — 지원자 / 지통실 / 전술보드 명단에서 공용으로 씀     */
+  /* 포지션별 필터 팝업 — 참가자 / 지통실 / 전술보드 명단에서 공용으로 씀     */
   /* "OO 전체"를 체크하면 그 그룹의 모든 표기가, 세부 칩만 체크하면 그 표기만       */
   /* 대상이 된다. 둘은 서로 자동으로 맞춰진다("OO 전체" 체크 시 세부 칩도 전부      */
   /* 체크되고, 세부 칩을 전부 체크하면 "OO 전체"도 자동으로 체크됨)               */
@@ -293,7 +293,7 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* 스프레드시트(Firebase) 에서 지원자 명단 불러오기                        */
+  /* 스프레드시트(Firebase) 에서 참가자 명단 불러오기                        */
   /* "지원자 동기화 apps script.txt" 가 같은 경로에 씀 —                     */
   /* 실패하면 data.js 에 들어있는 예비 명단을 그대로 사용                     */
   /* ------------------------------------------------------------------ */
@@ -344,7 +344,7 @@
     }).join("");
   }
 
-  // 지원자 카드/피드 공용 — 프로필 사진(있으면) 또는 이름 첫 글자 아바타
+  // 참가자 카드/피드 공용 — 프로필 사진(있으면) 또는 이름 첫 글자 아바타
   function avatarInnerHTML(a) {
     return a.photo
       ? `<img src="${esc(a.photo)}" alt="${esc(a.name)} 프로필" loading="lazy" />`
@@ -352,50 +352,24 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* 지원자 탭 — 지원글을 쭉 모아보는 피드                                    */
-  /* 글 자체는 네트워크 요청 없이 즉시 뜨고, 방송국 프로필 사진만 지통실처럼      */
-  /* SOOP에서 비동기로 불러와 채운다                                        */
-  /* 기본은 카드가 접혀서 미리보기 한 줄만 보이고, 눌러야 전체 글이 펼쳐진다      */
+  /* 참가자 탭 — FC26 시리즈 카드 느낌의 육각형 카드로 참가자를 보여준다        */
+  /* 사진은 스프레드시트 C열(참가자 사진 링크)이 있으면 그걸 쓰고, 없으면       */
+  /* 지통실처럼 SOOP 프로필 사진을 비동기로 불러와 채운다                     */
   /* ------------------------------------------------------------------ */
-  function postFeedPreviewText(postText) {
-    const flat = postText.trim().replace(/\s+/g, " ");
-    const MAX = 70;
-    return flat.length > MAX ? flat.slice(0, MAX) + "…" : flat;
-  }
-
   function postFeedItemHTML(a) {
-    const style = positionColorStyle(a.position);
-    const hasText = !!(a.postText && a.postText.trim());
-    const text = hasText ? esc(a.postText) : "(지원글이 아직 없어요)";
-    const preview = hasText ? esc(postFeedPreviewText(a.postText)) : "(지원글이 아직 없어요)";
-    // 지원글 링크(스프레드시트 E열)가 있으면 그 글로, 없으면 모집 게시글로 이동
-    const postLinkUrl = a.postUrl || DATA.POST_URL || "";
     return `
-    <article class="post-feed-item" style="${style}" data-name="${esc(a.name)}" data-position="${esc(a.position || "")}">
-      <header class="post-feed-header">
-        <a class="applicant-avatar post-feed-avatar" data-role="avatar" data-station="${esc(a.station)}" href="${esc(stationUrl(a.station))}" target="_blank" rel="noopener noreferrer" title="${esc(a.name)} 방송국으로 이동">${avatarInnerHTML(a)}</a>
-        <span class="post-feed-name">${esc(a.name)}</span>
-        ${positionBadgeHTML(a.position)}
-        <span class="post-feed-likes">👍 ${a.likeCount || 0}</span>
-        ${postLinkUrl ? `<a class="post-feed-postlink" href="${esc(postLinkUrl)}" target="_blank" rel="noopener noreferrer">지원글 보기 ↗</a>` : ""}
-        <button class="post-feed-toggle" type="button" aria-expanded="false">더보기 ▾</button>
-      </header>
-      <p class="post-feed-preview">${preview}</p>
-      <div class="post-feed-text" hidden>${text}</div>
-    </article>`;
-  }
-
-  function togglePostFeedItem(item) {
-    const expanded = item.classList.toggle("expanded");
-    const preview = item.querySelector(".post-feed-preview");
-    const text = item.querySelector(".post-feed-text");
-    const btn = item.querySelector(".post-feed-toggle");
-    if (preview) preview.hidden = expanded;
-    if (text) text.hidden = !expanded;
-    if (btn) {
-      btn.setAttribute("aria-expanded", String(expanded));
-      btn.textContent = expanded ? "접기 ▴" : "더보기 ▾";
-    }
+    <a class="post-feed-item participant-card" data-name="${esc(a.name)}" data-position="${esc(a.position || "")}" href="${esc(stationUrl(a.station))}" target="_blank" rel="noopener noreferrer" title="${esc(a.name)} 방송국으로 이동">
+      <div class="participant-card-shape">
+        <div class="participant-card-inner">
+          ${a.position ? `<span class="participant-card-pos">${esc(a.position)}</span>` : ""}
+          <div class="post-feed-avatar participant-card-photo" data-role="avatar" data-station="${esc(a.station)}">${avatarInnerHTML(a)}</div>
+          <div class="participant-card-info">
+            <span class="participant-card-name">${esc(a.name)}</span>
+            <img class="participant-card-logo" src="logo.png" alt="천치원" />
+          </div>
+        </div>
+      </div>
+    </a>`;
   }
 
   const POST_FEED_SORTERS = {
@@ -426,29 +400,16 @@
     const comparator = POST_FEED_SORTERS[postFeedSortMode] || sortByName;
     const sorted = DATA.APPLICANTS.slice().sort(comparator);
     feed.innerHTML = sorted.map(postFeedItemHTML).join("");
-    if (countEl) countEl.textContent = `총 ${DATA.APPLICANTS.length}명 지원`;
+    if (countEl) countEl.textContent = `총 ${DATA.APPLICANTS.length}명 참가`;
     applyPostFeedFilter();
 
     sorted.forEach((a) => {
-      if (a.photo) return; // 시트에 사진이 직접 지정돼 있으면 이미 채워져 있으니 건너뜀
+      if (a.photo) return; // 시트(C열)에 사진 링크가 직접 지정돼 있으면 이미 채워져 있으니 건너뜀
       getStationData(a.station).then((data) => {
         if (!data || !data.profile_image) return;
         const avatarEl = feed.querySelector(`.post-feed-avatar[data-station="${cssEscape(a.station)}"]`);
         if (avatarEl) avatarEl.innerHTML = `<img src="${esc(protocolize(data.profile_image))}" alt="${esc(a.name)} 프로필" loading="lazy" />`;
       });
-    });
-  }
-
-  // 카드 접기/펼치기 — 이벤트 위임으로 한 번만 걸어두면 정렬/필터로 다시
-  // 그려져도(innerHTML 교체) 계속 동작한다
-  const postFeedEl = document.getElementById("post-feed");
-  if (postFeedEl) {
-    postFeedEl.addEventListener("click", (e) => {
-      if (e.target.closest("a")) return; // 프로필 사진(방송국)·지원글 링크는 그대로 새 탭으로 이동
-      const header = e.target.closest(".post-feed-header");
-      if (!header) return;
-      const item = header.closest(".post-feed-item");
-      if (item) togglePostFeedItem(item);
     });
   }
 
@@ -470,7 +431,7 @@
     });
   });
 
-  // 포지션별 필터 팝업 — 지원자 탭
+  // 포지션별 필터 팝업 — 참가자 탭
   postFeedPositionFilterCtrl = createPositionFilterController({
     modalId: "position-filter-modal",
     openBtnId: "post-feed-position-filter-btn",
@@ -546,7 +507,7 @@
 
     grid.innerHTML = sorted.length
       ? sorted.map(({ a }) => controlCardHTML(a)).join("")
-      : `<p class="applicant-loading">조건에 맞는 지원자가 없어요.</p>`;
+      : `<p class="applicant-loading">조건에 맞는 참가자가 없어요.</p>`;
 
     sorted.forEach(({ a, data }) => {
       const card = grid.querySelector(`.applicant-card[data-station="${cssEscape(a.station)}"]`);
@@ -590,13 +551,13 @@
     const countEl = document.getElementById("control-count");
     if (!grid) return;
 
-    grid.innerHTML = `<p class="applicant-loading">지원자 목록을 불러오는 중...</p>`;
+    grid.innerHTML = `<p class="applicant-loading">참가자 목록을 불러오는 중...</p>`;
 
     controlRoomData = await Promise.all(
       DATA.APPLICANTS.map((a) => getStationData(a.station).then((data) => ({ a, data })))
     );
 
-    if (countEl) countEl.textContent = `총 ${DATA.APPLICANTS.length}명 지원`;
+    if (countEl) countEl.textContent = `총 ${DATA.APPLICANTS.length}명 참가`;
     renderControlGrid();
   }
 
@@ -709,7 +670,7 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* 맨 위로 이동 버튼 — 지원자/지통실처럼 목록이 긴 탭에서 스크롤을 좀 내리면 */
+  /* 맨 위로 이동 버튼 — 참가자/지통실처럼 목록이 긴 탭에서 스크롤을 좀 내리면 */
   /* 오른쪽 아래에 나타나서, 누르면 상단 메뉴가 있는 맨 위로 데려다준다        */
   /* ------------------------------------------------------------------ */
   const scrollTopBtn = document.getElementById("scroll-top-btn");
@@ -848,7 +809,7 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* 전술보드 탭 — 드래그 앤 드롭 포메이션 보드 (지원자 명단 기반)             */
+  /* 전술보드 탭 — 드래그 앤 드롭 포메이션 보드 (참가자 명단 기반)             */
   /* ------------------------------------------------------------------ */
 
   // tacticalboard.html처럼 그라운드가 화면을 거의 다 채우도록 크게 잡는다.
@@ -1160,8 +1121,8 @@
     let rosterPositionFilterCtrl = null; // 아래(초기화 구간)에서 createPositionFilterController로 생성됨
 
     /* -------------------------------------------------------------- */
-    /* 직접 추가한 선수 — 지원자 명단에 없는 이름을 사진(천치원 로고)만       */
-    /* 붙여서 명단에 끼워 넣는다. 실제 지원자 목록(DATA.APPLICANTS)은         */
+    /* 직접 추가한 선수 — 참가자 명단에 없는 이름을 사진(천치원 로고)만       */
+    /* 붙여서 명단에 끼워 넣는다. 실제 참가자 목록(DATA.APPLICANTS)은         */
     /* 건드리지 않고, 로컬에만 저장되는 별도 명단으로 관리한다                 */
     /* -------------------------------------------------------------- */
     function loadCustomPlayers() {
@@ -1208,7 +1169,7 @@
 
     /* -------------------------------------------------------------- */
     /* 더미선수 — 이름/사진 없이 사이트 메인 컬러 코인만 그라운드에 놓는 표식     */
-    /* (지원자 명단과 무관하게 도구 패널에서 바로 추가/이동/삭제)                */
+    /* (참가자 명단과 무관하게 도구 패널에서 바로 추가/이동/삭제)                */
     /* -------------------------------------------------------------- */
     const DUMMY_STORAGE_KEY = "cheonchiwon-s2-formation-dummies-v1";
 
@@ -1290,7 +1251,7 @@
       pitchTokensEl.appendChild(chip);
     }
 
-    // 지원자 코인과 같은 방식 — 드래그하는 동안은 마우스를 따라다니는 고스트만 보이고
+    // 참가자 코인과 같은 방식 — 드래그하는 동안은 마우스를 따라다니는 고스트만 보이고
     // (원본은 숨김), 놓는 순간 트랜지션 없이 그 자리에 바로 스냅된다
     function startDummyDrag(e, chip, d) {
       if (e.button !== undefined && e.button !== 0) return;
@@ -1437,7 +1398,7 @@
     }
 
     /* -------------------------------------------------------------- */
-    /* 지원자 프로필 사진 적용 (SOOP API 로 비동기 도착, 정지 프레임으로 고정)     */
+    /* 참가자 프로필 사진 적용 (SOOP API 로 비동기 도착, 정지 프레임으로 고정)     */
     /* -------------------------------------------------------------- */
     function hookPhoto(name) {
       const applicant = applicantByName.get(name);
@@ -1951,7 +1912,7 @@
         ctx.fillText(String(d.number != null ? d.number : ""), cx, cy);
       });
 
-      // 배치된 지원자 — 포지션 색 테두리 원 + 이름 (직접추가 선수는 로고 사진)
+      // 배치된 참가자 — 포지션 색 테두리 원 + 이름 (직접추가 선수는 로고 사진)
       Object.keys(positions).forEach((name) => {
         const p = positions[name];
         const applicant = applicantByName.get(name);
@@ -2013,7 +1974,7 @@
     /* -------------------------------------------------------------- */
     rosterSearchEl.addEventListener("input", filterRoster);
 
-    // 직접추가 — 지원자 명단에 없는 이름을 직접 입력해서 추가 (사진은 천치원 로고)
+    // 직접추가 — 참가자 명단에 없는 이름을 직접 입력해서 추가 (사진은 천치원 로고)
     if (rosterAddBtnEl && rosterAddInputEl) {
       const submitAddPlayer = () => {
         const result = addCustomPlayer(rosterAddInputEl.value);
@@ -2049,7 +2010,7 @@
 
     btnClear.addEventListener("click", () => {
       if (Object.keys(positions).length === 0 && dummyTokens.length === 0) return;
-      if (!confirm("그라운드와 벤치에 배치된 지원자와 더미선수를 모두 되돌릴까요?")) return;
+      if (!confirm("그라운드와 벤치에 배치된 참가자와 더미선수를 모두 되돌릴까요?")) return;
       positions = {};
       dummyTokens = [];
       renderAll();
