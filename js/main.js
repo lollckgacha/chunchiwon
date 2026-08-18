@@ -175,7 +175,7 @@
 
     const closeBtn = opts.closeBtnId ? document.getElementById(opts.closeBtnId) : null;
     const resetBtn = opts.resetBtnId ? document.getElementById(opts.resetBtnId) : null;
-    const state = { groups: new Set(), tokens: new Set() };
+    const state = { groups: new Set(), tokens: new Set(), includeNone: false };
 
     function setChipChecked(cb, checked) {
       cb.checked = checked;
@@ -184,7 +184,7 @@
     }
 
     function updateOpenBtnLabel() {
-      const count = state.groups.size + state.tokens.size;
+      const count = state.groups.size + state.tokens.size + (state.includeNone ? 1 : 0);
       openBtn.classList.toggle("active", count > 0);
       openBtn.textContent = count > 0 ? `${opts.label} (${count})` : opts.label;
     }
@@ -251,10 +251,21 @@
       });
     });
 
+    const noneCb = modal.querySelector('input[type="checkbox"][data-role="none"]');
+    if (noneCb) {
+      noneCb.addEventListener("change", () => {
+        state.includeNone = noneCb.checked;
+        setChipChecked(noneCb, noneCb.checked);
+        updateOpenBtnLabel();
+        opts.onChange();
+      });
+    }
+
     if (resetBtn) {
       resetBtn.addEventListener("click", () => {
         state.groups.clear();
         state.tokens.clear();
+        state.includeNone = false;
         modal.querySelectorAll('input[type="checkbox"]').forEach((cb) => setChipChecked(cb, false));
         updateOpenBtnLabel();
         opts.onChange();
@@ -262,14 +273,15 @@
     }
 
     // positionStr(예: "FB / CDM")이 지금 선택된 필터에 하나라도 걸리면 true.
-    // 필터가 아무것도 선택 안 된 상태면(둘 다 비어있으면) 항상 true(전체 표시)
+    // 필터가 아무것도 선택 안 된 상태면 항상 true(전체 표시).
+    // "포지션 없음"을 체크했으면, 포지션이 비어있는(표기가 하나도 없는) 항목만 매치된다
     function matches(positionStr) {
-      if (state.groups.size === 0 && state.tokens.size === 0) return true;
       const tokens = String(positionStr || "")
         .split(/[,/]/)
         .map((s) => s.trim().toUpperCase())
         .filter(Boolean);
-      if (tokens.length === 0) return false;
+      if (state.groups.size === 0 && state.tokens.size === 0 && !state.includeNone) return true;
+      if (tokens.length === 0) return state.includeNone;
       return tokens.some((t) => {
         const group = POSITION_GROUP_BY_TOKEN[t] || null;
         if (group && state.groups.has(group)) return true;
