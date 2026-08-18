@@ -409,7 +409,7 @@ main {
   font-size: 1.02rem;
 }
 
-/* 좋아요수(스프레드시트 F열) — 0보다 클 때만 표시 */
+/* 좋아요수(스프레드시트 F열) — 0이어도 항상 표시 */
 .post-feed-likes {
   flex-shrink: 0;
   font-size: 0.72rem;

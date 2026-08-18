@@ -234,7 +234,7 @@
         <a class="applicant-avatar post-feed-avatar" data-role="avatar" data-station="${esc(a.station)}" href="${esc(stationUrl(a.station))}" target="_blank" rel="noopener noreferrer" title="${esc(a.name)} 방송국으로 이동">${avatarInnerHTML(a)}</a>
         <span class="post-feed-name">${esc(a.name)}</span>
         ${positionBadgeHTML(a.position)}
-        ${a.likeCount > 0 ? `<span class="post-feed-likes">❤ ${a.likeCount}</span>` : ""}
+        <span class="post-feed-likes">👍 ${a.likeCount || 0}</span>
         ${postLinkUrl ? `<a class="post-feed-postlink" href="${esc(postLinkUrl)}" target="_blank" rel="noopener noreferrer">지원글 보기 ↗</a>` : ""}
         <button class="post-feed-toggle" type="button" aria-expanded="false">더보기 ▾</button>
       </header>
