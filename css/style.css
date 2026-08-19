@@ -509,11 +509,14 @@ main {
 .participant-card-shape {
   width: 100%;
   aspect-ratio: 160 / 240;
-  clip-path: polygon(10% 0%, 90% 0%, 100% 10%, 100% 85%, 50% 100%, 0% 85%, 0% 10%);
+  clip-path: url(#participant-shield-clip);
   background: linear-gradient(155deg, var(--fc-green), var(--fc-green-dim) 70%);
   padding: 3px;
   box-sizing: border-box;
   transition: transform 0.15s ease, filter 0.15s ease;
+  /* 클리핑된 모서리를 별도 합성 레이어로 그려서 계단현상(자글거림)을 줄인다 */
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .participant-card:hover .participant-card-shape {
@@ -524,7 +527,7 @@ main {
 .participant-card-inner {
   width: 100%;
   height: 100%;
-  clip-path: polygon(10% 0%, 90% 0%, 100% 10%, 100% 85%, 50% 100%, 0% 85%, 0% 10%);
+  clip-path: url(#participant-shield-clip);
   background: linear-gradient(155deg, rgba(83,247,186,0.28) 0%, #0a0a0a 55%, #000000 100%);
   position: relative;
   overflow: hidden;
@@ -554,6 +557,7 @@ main {
   border-radius: 6px;
   overflow: hidden;
   background: transparent;
+  transform: translateZ(0);
   display: flex;
   align-items: center;
   justify-content: center;
