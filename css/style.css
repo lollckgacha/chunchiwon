@@ -534,11 +534,14 @@ main {
   position: absolute;
   top: 12%;
   left: 10%;
+  z-index: 2;
   font-weight: 900;
   font-size: 1.05rem;
   letter-spacing: 0.3px;
-  color: var(--fc-green);
-  text-shadow: 0 1px 3px rgba(0,0,0,0.85);
+  color: #ffffff;
+  -webkit-text-stroke: 1.5px #000000;
+  paint-order: stroke fill;
+  text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
 }
 
 .participant-card-photo {
@@ -547,9 +550,10 @@ main {
   left: 10%;
   width: 80%;
   height: 46%;
+  z-index: 1;
   border-radius: 6px;
   overflow: hidden;
-  background: rgba(255,255,255,0.04);
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
